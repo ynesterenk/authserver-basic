@@ -16,20 +16,20 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * In-memory implementation of UserRepository for unit testing.
- * This implementation is only active when neither 'local' nor 'aws' profiles are active.
+ * Local implementation of UserRepository for testing and development.
+ * Uses in-memory storage with test users and real password hashing.
  */
 @Component
-@Profile("!local & !aws")
-public class InMemoryUserRepository implements UserRepository {
+@Profile("local")
+public class LocalUserRepository implements UserRepository {
 
-    private static final Logger logger = LoggerFactory.getLogger(InMemoryUserRepository.class);
+    private static final Logger logger = LoggerFactory.getLogger(LocalUserRepository.class);
     
     private final Map<String, User> users;
     
-    public InMemoryUserRepository(PasswordHasher passwordHasher) {
+    public LocalUserRepository(PasswordHasher passwordHasher) {
         this.users = createTestUsers(passwordHasher);
-        logger.info("InMemoryUserRepository initialized with {} test users", users.size());
+        logger.info("LocalUserRepository initialized with {} test users", users.size());
     }
 
     @Override
@@ -51,12 +51,12 @@ public class InMemoryUserRepository implements UserRepository {
 
     @Override
     public Map<String, User> getAllUsers() {
-        logger.debug("Retrieved {} users from in-memory repository", users.size());
+        logger.debug("Retrieved {} users from local repository", users.size());
         return Collections.unmodifiableMap(users);
     }
 
     /**
-     * Creates test users with proper password hashing.
+     * Creates test users with proper password hashing for local testing.
      */
     private Map<String, User> createTestUsers(PasswordHasher passwordHasher) {
         Map<String, User> testUsers = new HashMap<>();
@@ -67,7 +67,7 @@ public class InMemoryUserRepository implements UserRepository {
                 "alice",
                 passwordHasher.hashPassword("password123"),
                 UserStatus.ACTIVE,
-                List.of("user")
+                List.of("admin", "user")
             ));
             
             // Admin - Another admin user
@@ -75,7 +75,7 @@ public class InMemoryUserRepository implements UserRepository {
                 "admin",
                 passwordHasher.hashPassword("admin123"),
                 UserStatus.ACTIVE,
-                List.of("admin", "user")
+                List.of("admin")
             ));
             
             // Bob - Disabled user for testing
@@ -91,7 +91,15 @@ public class InMemoryUserRepository implements UserRepository {
                 "charlie",
                 passwordHasher.hashPassword("charlie789"),
                 UserStatus.ACTIVE,
-                List.of()
+                List.of("user")
+            ));
+            
+            // Test user for integration tests
+            testUsers.put("testuser", new User(
+                "testuser",
+                passwordHasher.hashPassword("testpass"),
+                UserStatus.ACTIVE,
+                List.of("test")
             ));
             
             logger.info("Created {} test users with real password hashing", testUsers.size());
@@ -111,5 +119,29 @@ public class InMemoryUserRepository implements UserRepository {
             return "***";
         }
         return username.charAt(0) + "***" + username.charAt(username.length() - 1);
+    }
+    
+    /**
+     * Adds a user to the local repository (for testing purposes).
+     */
+    public void addUser(User user) {
+        users.put(user.getUsername(), user);
+        logger.debug("Added user to local repository: {}", maskUsername(user.getUsername()));
+    }
+    
+    /**
+     * Removes a user from the local repository (for testing purposes).
+     */
+    public void removeUser(String username) {
+        users.remove(username);
+        logger.debug("Removed user from local repository: {}", maskUsername(username));
+    }
+    
+    /**
+     * Clears all users (for testing purposes).
+     */
+    public void clearUsers() {
+        users.clear();
+        logger.debug("Cleared all users from local repository");
     }
 } 

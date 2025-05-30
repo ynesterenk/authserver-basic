@@ -1,0 +1,199 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'Java Authorization Server - Basic Authentication Lambda'
+
+Parameters:
+  StageName:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, test, prod]
+    Description: Deployment stage name
+  
+  CredentialSecretArn:
+    Type: String
+    Default: ""
+    Description: ARN of the Secrets Manager secret containing user credentials (leave empty for local testing)
+  
+  CacheTtlMinutes:
+    Type: Number
+    Default: 5
+    MinValue: 1
+    MaxValue: 60
+    Description: Cache TTL for user data in minutes
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 512
+    Runtime: java21
+    Architectures:
+      - x86_64
+    Environment:
+      Variables:
+        JAVA_TOOL_OPTIONS: -XX:+TieredCompilation -XX:TieredStopAtLevel=1 # quicker startup
+        LOG_LEVEL: INFO
+
+Resources:
+  
+  # Lambda Function
+  AuthFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-auth-function"
+      CodeUri: target/auth-server-lambda.jar
+      Handler: com.example.auth.infrastructure.LambdaHandler::handleRequest
+      Description: "Java Authorization Server - Basic Authentication"
+      Environment:
+        Variables:
+          CREDENTIAL_SECRET_ARN: !Ref CredentialSecretArn
+          CACHE_TTL_MINUTES: !Ref CacheTtlMinutes
+          STAGE: !Ref StageName
+      Events:
+        AuthValidate:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AuthApi
+            Path: /auth/validate
+            Method: POST
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Ref CredentialSecretArn
+              Condition:
+                StringEquals:
+                  secretsmanager:VersionStage: AWSCURRENT
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-auth-function*"
+            - Effect: Allow
+              Action:
+                - xray:PutTraceSegments
+                - xray:PutTelemetryRecords
+              Resource: "*"
+      DeadLetterQueue:
+        Type: SQS
+        TargetArn: !GetAtt AuthDLQ.Arn
+      ReservedConcurrencyLimit: 100
+      Tracing: Active
+
+  # API Gateway
+  AuthApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub "${AWS::StackName}-auth-api"
+      StageName: !Ref StageName
+      Description: "Authentication API Gateway"
+      Cors:
+        AllowMethods: "'POST, OPTIONS'"
+        AllowHeaders: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
+      AccessLogSetting:
+        DestinationArn: !GetAtt AuthApiLogGroup.Arn
+        Format: >
+          {
+            "requestId": "$context.requestId",
+            "requestTime": "$context.requestTime",
+            "httpMethod": "$context.httpMethod",
+            "path": "$context.path",
+            "status": "$context.status",
+            "responseTime": "$context.responseTime",
+            "responseLength": "$context.responseLength",
+            "userAgent": "$context.identity.userAgent",
+            "sourceIp": "$context.identity.sourceIp"
+          }
+      TracingEnabled: true
+      MethodSettings:
+        - ResourcePath: "/*"
+          HttpMethod: "*"
+          ThrottlingRateLimit: 1000
+          ThrottlingBurstLimit: 2000
+          LoggingLevel: INFO
+          DataTraceEnabled: false
+
+  # CloudWatch Log Groups
+  AuthFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${AWS::StackName}-auth-function"
+      RetentionInDays: 7
+
+  AuthApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/apigateway/${AWS::StackName}-auth-api"
+      RetentionInDays: 7
+
+  # Dead Letter Queue for failed Lambda invocations
+  AuthDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${AWS::StackName}-auth-dlq"
+      MessageRetentionPeriod: 1209600 # 14 days
+      VisibilityTimeoutSeconds: 60
+
+  # CloudWatch Alarms
+  AuthErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-auth-function-errors"
+      AlarmDescription: "Auth function error rate alarm"
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 5
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AuthFunction
+      TreatMissingData: notBreaching
+
+  AuthLatencyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-auth-function-latency"
+      AlarmDescription: "Auth function high latency alarm"
+      MetricName: Duration
+      Namespace: AWS/Lambda
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 3
+      Threshold: 5000  # 5 seconds
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AuthFunction
+      TreatMissingData: notBreaching
+
+Outputs:
+  AuthApiUrl:
+    Description: "API Gateway endpoint URL"
+    Value: !Sub "https://${AuthApi}.execute-api.${AWS::Region}.amazonaws.com/${StageName}"
+    Export:
+      Name: !Sub "${AWS::StackName}-api-url"
+
+  AuthFunctionArn:
+    Description: "Auth Lambda Function ARN"
+    Value: !GetAtt AuthFunction.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-function-arn"
+
+  AuthApiId:
+    Description: "API Gateway ID"
+    Value: !Ref AuthApi
+    Export:
+      Name: !Sub "${AWS::StackName}-api-id"
+
+  TestCommand:
+    Description: "Example curl command for testing"
+    Value: !Sub |
+      curl -X POST https://${AuthApi}.execute-api.${AWS::Region}.amazonaws.com/${StageName}/auth/validate \
+        -H "Authorization: Basic $(echo -n 'alice:password123' | base64)" \
+        -H "Content-Type: application/json" 
