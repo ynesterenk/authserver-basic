@@ -1,0 +1,343 @@
+name: Deploy Java Authorization Server
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+        - dev
+        - staging
+        - prod
+      region:
+        description: 'AWS Region'
+        required: true
+        default: 'us-east-1'
+
+env:
+  AWS_REGION: us-east-1
+  ACCOUNT_ID: 545009823602
+  ARTIFACT_BUCKET_PREFIX: auth-server-artifacts
+
+jobs:
+  # Test and validate the code
+  test:
+    name: Test & Validate
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'corretto'
+      
+      - name: Cache Maven dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
+      
+      - name: Run unit tests
+        run: mvn clean test
+      
+      - name: Generate test report
+        uses: dorny/test-reporter@v1
+        if: success() || failure()
+        with:
+          name: Maven Tests
+          path: target/surefire-reports/*.xml
+          reporter: java-junit
+      
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-results
+          path: |
+            target/surefire-reports/
+            target/jacoco/
+      
+      - name: Security scan - OWASP Dependency Check
+        run: |
+          mvn org.owasp:dependency-check-maven:check \
+            -DfailBuildOnCVSS=7 \
+            -DskipTestScope=true
+        continue-on-error: true
+      
+      - name: Upload dependency check results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: dependency-check-report
+          path: target/dependency-check-report.html
+      
+      - name: Validate CloudFormation templates
+        run: |
+          # Install cfn-lint
+          pip install cfn-lint
+          
+          # Validate main template
+          cfn-lint infrastructure/main-template.yaml
+          
+          # Validate nested templates
+          find infrastructure/nested-stacks -name "*.yaml" -exec cfn-lint {} \;
+      
+      - name: Build Lambda package
+        run: mvn clean package -DskipTests
+      
+      - name: Upload Lambda artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: lambda-package
+          path: target/auth-server-lambda.jar
+          retention-days: 30
+
+  # Deploy to development environment
+  deploy-dev:
+    name: Deploy to Development
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'dev')
+    environment: 
+      name: development
+      url: ${{ steps.deploy.outputs.api_endpoint }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Download Lambda artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: lambda-package
+          path: target/
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Deploy to AWS
+        id: deploy
+        run: |
+          chmod +x scripts/deploy.sh
+          ./scripts/deploy.sh dev ${{ env.AWS_REGION }} ${{ env.ARTIFACT_BUCKET_PREFIX }} ${{ env.ACCOUNT_ID }}
+          
+          # Extract API endpoint from deployment info
+          API_ENDPOINT=$(jq -r '.apiEndpoint' deployment-info-dev.json)
+          echo "api_endpoint=$API_ENDPOINT" >> $GITHUB_OUTPUT
+      
+      - name: Run smoke tests
+        run: |
+          chmod +x scripts/smoke-test.sh
+          ./scripts/smoke-test.sh dev ${{ env.AWS_REGION }} ${{ steps.deploy.outputs.api_endpoint }}
+      
+      - name: Upload deployment info
+        uses: actions/upload-artifact@v3
+        with:
+          name: deployment-info-dev
+          path: deployment-info-dev.json
+
+  # Deploy to staging environment  
+  deploy-staging:
+    name: Deploy to Staging
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
+    environment: 
+      name: staging
+      url: ${{ steps.deploy.outputs.api_endpoint }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Download Lambda artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: lambda-package
+          path: target/
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Deploy to AWS
+        id: deploy
+        run: |
+          chmod +x scripts/deploy.sh
+          ./scripts/deploy.sh staging ${{ env.AWS_REGION }} ${{ env.ARTIFACT_BUCKET_PREFIX }} ${{ env.ACCOUNT_ID }}
+          
+          # Extract API endpoint from deployment info
+          API_ENDPOINT=$(jq -r '.apiEndpoint' deployment-info-staging.json)
+          echo "api_endpoint=$API_ENDPOINT" >> $GITHUB_OUTPUT
+      
+      - name: Run smoke tests
+        run: |
+          chmod +x scripts/smoke-test.sh
+          ./scripts/smoke-test.sh staging ${{ env.AWS_REGION }} ${{ steps.deploy.outputs.api_endpoint }}
+      
+      - name: Upload deployment info
+        uses: actions/upload-artifact@v3
+        with:
+          name: deployment-info-staging
+          path: deployment-info-staging.json
+
+  # Deploy to production environment (requires manual approval)
+  deploy-prod:
+    name: Deploy to Production
+    needs: [test, deploy-staging]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'prod')
+    environment: 
+      name: production
+      url: ${{ steps.deploy.outputs.api_endpoint }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Download Lambda artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: lambda-package
+          path: target/
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_PROD }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_PROD }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Deploy to AWS
+        id: deploy
+        run: |
+          chmod +x scripts/deploy.sh
+          ./scripts/deploy.sh prod ${{ env.AWS_REGION }} ${{ env.ARTIFACT_BUCKET_PREFIX }} ${{ env.ACCOUNT_ID }}
+          
+          # Extract API endpoint from deployment info
+          API_ENDPOINT=$(jq -r '.apiEndpoint' deployment-info-prod.json)
+          echo "api_endpoint=$API_ENDPOINT" >> $GITHUB_OUTPUT
+      
+      - name: Run smoke tests
+        run: |
+          chmod +x scripts/smoke-test.sh
+          ./scripts/smoke-test.sh prod ${{ env.AWS_REGION }} ${{ steps.deploy.outputs.api_endpoint }}
+      
+      - name: Upload deployment info
+        uses: actions/upload-artifact@v3
+        with:
+          name: deployment-info-prod
+          path: deployment-info-prod.json
+      
+      - name: Create GitHub release
+        if: github.ref == 'refs/heads/main'
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ github.run_number }}
+          release_name: Release v${{ github.run_number }}
+          body: |
+            ## Java Authorization Server - Production Release
+            
+            **Environment:** Production
+            **API Endpoint:** ${{ steps.deploy.outputs.api_endpoint }}
+            **Build:** ${{ github.sha }}
+            **Timestamp:** ${{ github.event.head_commit.timestamp }}
+            
+            ### Changes
+            ${{ github.event.head_commit.message }}
+            
+            ### Test Results
+            - All unit tests passed ✅
+            - Security scan completed ✅
+            - Smoke tests passed ✅
+            
+            ### Deployment Info
+            - Stack Name: java-auth-server-prod
+            - Region: ${{ env.AWS_REGION }}
+            - Account ID: ${{ env.ACCOUNT_ID }}
+          draft: false
+          prerelease: false
+
+  # Notification job
+  notify:
+    name: Notify Deployment Status
+    needs: [deploy-dev, deploy-staging, deploy-prod]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Determine deployment status
+        id: status
+        run: |
+          if [[ "${{ needs.deploy-dev.result }}" == "success" ]] || [[ "${{ needs.deploy-staging.result }}" == "success" ]] || [[ "${{ needs.deploy-prod.result }}" == "success" ]]; then
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "message=✅ Deployment completed successfully" >> $GITHUB_OUTPUT
+          else
+            echo "status=failure" >> $GITHUB_OUTPUT  
+            echo "message=❌ Deployment failed" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Send notification
+        if: steps.status.outputs.status == 'success'
+        run: |
+          echo "Deployment Status: ${{ steps.status.outputs.message }}"
+          echo "Repository: ${{ github.repository }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "Actor: ${{ github.actor }}"
+
+  # Cleanup job for failed deployments
+  cleanup:
+    name: Cleanup Failed Deployment
+    needs: [deploy-dev, deploy-staging, deploy-prod]
+    runs-on: ubuntu-latest
+    if: failure()
+    
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Check for failed stacks
+        run: |
+          echo "Checking for failed CloudFormation stacks..."
+          
+          # Check each environment
+          for env in dev staging prod; do
+            stack_name="java-auth-server-${env}"
+            status=$(aws cloudformation describe-stacks \
+              --stack-name "$stack_name" \
+              --query 'Stacks[0].StackStatus' \
+              --output text 2>/dev/null || echo "NOT_FOUND")
+            
+            echo "Stack $stack_name status: $status"
+            
+            if [[ "$status" == *"ROLLBACK"* ]] || [[ "$status" == *"FAILED"* ]]; then
+              echo "⚠️  Found failed stack: $stack_name"
+              echo "Consider manual intervention or cleanup"
+            fi
+          done 

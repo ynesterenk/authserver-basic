@@ -1,0 +1,322 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'HTTP API Gateway configuration for Java Authorization Server'
+
+Parameters:
+  Environment:
+    Type: String
+    Description: Deployment environment
+  
+  ProjectName:
+    Type: String
+    Description: Project name for resource naming
+  
+  LambdaFunctionArn:
+    Type: String
+    Description: ARN of the Lambda function
+  
+  ThrottleRateLimit:
+    Type: Number
+    Default: 100
+    Description: API Gateway throttle rate limit (requests per second)
+  
+  ThrottleBurstLimit:
+    Type: Number
+    Default: 500
+    Description: API Gateway throttle burst limit
+
+Conditions:
+  IsProd: !Equals [!Ref Environment, 'prod']
+  IsStaging: !Equals [!Ref Environment, 'staging']
+
+Resources:
+  # HTTP API Gateway
+  HttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub '${ProjectName}-api-${Environment}'
+      Description: !Sub 'Java Authorization Server HTTP API - ${Environment}'
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowOrigins:
+          - !If 
+            - IsProd
+            - 'https://*.example.com'  # Replace with your production domains
+            - '*'
+        AllowMethods:
+          - POST
+          - GET
+          - OPTIONS
+        AllowHeaders:
+          - Authorization
+          - Content-Type
+          - X-Amz-Date
+          - X-Api-Key
+          - X-Amz-Security-Token
+        ExposeHeaders:
+          - X-Request-ID
+        MaxAge: 300
+        AllowCredentials: false
+      DisableExecuteApiEndpoint: !If [IsProd, false, false]  # Set to true if using custom domain
+      Tags:
+        Environment: !Ref Environment
+        Project: !Ref ProjectName
+        Component: API
+
+  # Lambda integration for API Gateway
+  LambdaIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Ref LambdaFunctionArn
+      PayloadFormatVersion: '2.0'
+      TimeoutInMillis: 29000
+      Description: !Sub 'Integration with ${ProjectName} Lambda function'
+
+  # Authentication validation route
+  AuthValidateRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: 'POST /auth/validate'
+      Target: !Sub 'integrations/${LambdaIntegration}'
+      AuthorizationType: NONE
+
+  # Health check route
+  HealthRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: 'GET /health'
+      Target: !Sub 'integrations/${LambdaIntegration}'
+      AuthorizationType: NONE
+
+  # Default OPTIONS route for CORS preflight
+  OptionsRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: 'OPTIONS /{proxy+}'
+      Target: !Sub 'integrations/${LambdaIntegration}'
+      AuthorizationType: NONE
+
+  # API Gateway Stage
+  ApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref HttpApi
+      StageName: !Ref Environment
+      AutoDeploy: true
+      Description: !Sub '${Environment} stage for ${ProjectName}'
+      ThrottleSettings:
+        BurstLimit: !Ref ThrottleBurstLimit
+        RateLimit: !Ref ThrottleRateLimit
+      AccessLogSettings:
+        DestinationArn: !GetAtt AccessLogGroup.Arn
+        Format: !Sub |
+          {
+            "requestId": "$context.requestId",
+            "requestTime": "$context.requestTime", 
+            "requestTimeEpoch": "$context.requestTimeEpoch",
+            "httpMethod": "$context.httpMethod",
+            "path": "$context.path",
+            "status": "$context.status",
+            "protocol": "$context.protocol",
+            "responseLength": "$context.responseLength",
+            "responseTime": "$context.responseTime",
+            "integrationResponseTime": "$context.integrationResponseTime",
+            "integrationLatency": "$context.integrationLatency",
+            "userAgent": "$context.identity.userAgent",
+            "sourceIp": "$context.identity.sourceIp",
+            "error": "$context.error.message",
+            "integrationError": "$context.integrationErrorMessage",
+            "stage": "${Environment}",
+            "domainName": "$context.domainName"
+          }
+      DefaultRouteSettings:
+        LoggingLevel: !If [IsProd, 'ERROR', 'INFO']
+        DataTraceEnabled: !If [IsProd, false, true]
+        MetricsEnabled: true
+        ThrottlingRateLimit: !Ref ThrottleRateLimit
+        ThrottlingBurstLimit: !Ref ThrottleBurstLimit
+      Tags:
+        Environment: !Ref Environment
+        Project: !Ref ProjectName
+        Component: API
+
+  # Lambda permission for API Gateway
+  LambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref LambdaFunctionArn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub '${HttpApi}/*/*'
+
+  # CloudWatch Log Group for API Gateway access logs
+  AccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/apigateway/${ProjectName}-${Environment}'
+      RetentionInDays: !If 
+        - IsProd
+        - 30
+        - !If [IsStaging, 14, 7]
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Component
+          Value: API
+
+  # Custom domain name (production only)
+  ApiDomainName:
+    Type: AWS::ApiGatewayV2::DomainName
+    Condition: IsProd
+    Properties:
+      DomainName: !Sub 'auth-api.example.com'  # Replace with your domain
+      DomainNameConfigurations:
+        - EndpointType: REGIONAL
+          CertificateArn: !Sub 'arn:aws:acm:${AWS::Region}:${AWS::AccountId}:certificate/your-cert-id'  # Replace with your ACM certificate
+          SecurityPolicy: TLS_1_2
+      Tags:
+        Environment: !Ref Environment
+        Project: !Ref ProjectName
+        Component: API
+
+  # API mapping for custom domain
+  ApiMapping:
+    Type: AWS::ApiGatewayV2::ApiMapping
+    Condition: IsProd
+    Properties:
+      DomainName: !Ref ApiDomainName
+      ApiId: !Ref HttpApi
+      Stage: !Ref ApiStage
+
+  # WAF Web ACL (production only)
+  WebACL:
+    Type: AWS::WAFv2::WebACL
+    Condition: IsProd
+    Properties:
+      Name: !Sub '${ProjectName}-api-waf-${Environment}'
+      Description: !Sub 'WAF for ${ProjectName} API Gateway - ${Environment}'
+      Scope: REGIONAL
+      DefaultAction:
+        Allow: {}
+      Rules:
+        # Rate limiting rule
+        - Name: RateLimitRule
+          Priority: 1
+          Statement:
+            RateBasedStatement:
+              Limit: 2000
+              AggregateKeyType: IP
+          Action:
+            Block: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: !Sub '${ProjectName}RateLimit'
+        
+        # AWS Managed Core Rule Set
+        - Name: AWSManagedRulesCommonRuleSet
+          Priority: 2
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: !Sub '${ProjectName}CommonRuleSet'
+        
+        # AWS Managed Known Bad Inputs Rule Set
+        - Name: AWSManagedRulesKnownBadInputsRuleSet
+          Priority: 3
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesKnownBadInputsRuleSet
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: !Sub '${ProjectName}BadInputs'
+
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: !Sub '${ProjectName}WebACL'
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Component
+          Value: Security
+
+  # Associate WAF with API Gateway
+  WebACLAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    Condition: IsProd
+    Properties:
+      ResourceArn: !Sub '${HttpApi}/stages/${Environment}'
+      WebACLArn: !GetAtt WebACL.Arn
+
+  # API Gateway custom metrics
+  RequestCountMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref AccessLogGroup
+      FilterPattern: '[requestId, requestTime, requestTimeEpoch, httpMethod, path, status, protocol, responseLength, responseTime, integrationResponseTime, integrationLatency, userAgent, sourceIp, error, integrationError, stage, domainName]'
+      MetricTransformations:
+        - MetricNamespace: !Sub 'AuthServer/API/${Environment}'
+          MetricName: RequestCount
+          MetricValue: '1'
+          DefaultValue: 0
+
+  ErrorRateMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref AccessLogGroup
+      FilterPattern: '[requestId, requestTime, requestTimeEpoch, httpMethod, path, status>=400, protocol, responseLength, responseTime, integrationResponseTime, integrationLatency, userAgent, sourceIp, error, integrationError, stage, domainName]'
+      MetricTransformations:
+        - MetricNamespace: !Sub 'AuthServer/API/${Environment}'
+          MetricName: ErrorCount
+          MetricValue: '1'
+          DefaultValue: 0
+
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway endpoint URL
+    Value: !Sub 'https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-ApiEndpoint'
+  
+  ApiGatewayId:
+    Description: API Gateway ID
+    Value: !Ref HttpApi
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-ApiGatewayId'
+  
+  ApiStageArn:
+    Description: API Gateway stage ARN
+    Value: !Sub '${HttpApi}/stages/${Environment}'
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-ApiStageArn'
+  
+  CustomDomainName:
+    Description: Custom domain name (if configured)
+    Value: !If [IsProd, !Ref ApiDomainName, 'Not configured']
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-CustomDomain'
+  
+  AccessLogGroupArn:
+    Description: API Gateway access log group ARN
+    Value: !GetAtt AccessLogGroup.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-AccessLogGroupArn' 

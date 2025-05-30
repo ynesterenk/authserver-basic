@@ -1,0 +1,26 @@
+[
+  {
+    "ParameterKey": "Environment",
+    "ParameterValue": "staging"
+  },
+  {
+    "ParameterKey": "LambdaMemorySize",
+    "ParameterValue": "768"
+  },
+  {
+    "ParameterKey": "ApiThrottleRateLimit",
+    "ParameterValue": "100"
+  },
+  {
+    "ParameterKey": "ApiThrottleBurstLimit",
+    "ParameterValue": "300"
+  },
+  {
+    "ParameterKey": "CacheTtlMinutes",
+    "ParameterValue": "5"
+  },
+  {
+    "ParameterKey": "NotificationEmail",
+    "ParameterValue": "yevgen2005@gmail.com"
+  }
+] 

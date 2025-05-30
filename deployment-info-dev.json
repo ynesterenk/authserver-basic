@@ -1,0 +1,10 @@
+{
+    "artifactLocation":  "s3://auth-server-artifacts-545009823602-us-east-1/auth-server-dev-20250531-001246.zip",
+    "timestamp":  "20250531-001246",
+    "accountId":  "545009823602",
+    "environment":  "dev",
+    "apiEndpoint":  "https://ya8l2od9y5.execute-api.us-east-1.amazonaws.com/dev",
+    "dashboardUrl":  null,
+    "region":  "us-east-1",
+    "stackName":  "java-auth-server-dev"
+}

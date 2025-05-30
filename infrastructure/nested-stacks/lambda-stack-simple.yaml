@@ -1,0 +1,81 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Simplified Lambda function configuration for debugging'
+
+Parameters:
+  Environment:
+    Type: String
+    Description: Deployment environment
+  
+  ProjectName:
+    Type: String
+    Description: Project name for resource naming
+  
+  ExecutionRoleArn:
+    Type: String
+    Description: ARN of the Lambda execution role
+  
+  SecretArn:
+    Type: String
+    Description: ARN of the Secrets Manager secret
+  
+  ArtifactBucket:
+    Type: String
+    Description: S3 bucket containing Lambda deployment package
+  
+  ArtifactKey:
+    Type: String
+    Description: S3 key for Lambda ZIP file
+  
+  MemorySize:
+    Type: Number
+    Default: 512
+    Description: Lambda function memory size in MB
+  
+  CacheTtlMinutes:
+    Type: Number
+    Default: 5
+    Description: Cache TTL for user credentials in minutes
+
+Resources:
+  # Simple Lambda Function
+  AuthFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-auth-function-${Environment}'
+      Runtime: java21
+      Handler: com.example.auth.infrastructure.LambdaHandler::handleRequest
+      Code:
+        S3Bucket: !Ref ArtifactBucket
+        S3Key: !Ref ArtifactKey
+      MemorySize: !Ref MemorySize
+      Timeout: 30
+      Role: !Ref ExecutionRoleArn
+      Environment:
+        Variables:
+          CREDENTIAL_SECRET_ARN: !Ref SecretArn
+          CACHE_TTL_MINUTES: !Ref CacheTtlMinutes
+          ENVIRONMENT: !Ref Environment
+          LOG_LEVEL: DEBUG
+          SPRING_PROFILES_ACTIVE: aws
+      TracingConfig:
+        Mode: Active
+
+  # CloudWatch Log Group
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ProjectName}-auth-function-${Environment}'
+      RetentionInDays: 7
+
+Outputs:
+  LambdaFunctionArn:
+    Description: ARN of the Lambda function
+    Value: !GetAtt AuthFunction.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-LambdaFunctionArn'
+  
+  LambdaFunctionName:
+    Description: Name of the Lambda function
+    Value: !Ref AuthFunction
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-LambdaFunctionName' 

@@ -1,0 +1,434 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CloudWatch monitoring and alerting for Java Authorization Server'
+
+Parameters:
+  Environment:
+    Type: String
+    Description: Deployment environment
+  
+  ProjectName:
+    Type: String
+    Description: Project name for resource naming
+  
+  LambdaFunctionName:
+    Type: String
+    Description: Name of the Lambda function
+  
+  ApiGatewayId:
+    Type: String
+    Description: API Gateway ID
+  
+  ApiGatewayStageName:
+    Type: String
+    Description: API Gateway stage name
+  
+  NotificationEmail:
+    Type: String
+    Default: ""
+    Description: Email address for CloudWatch alarms (optional)
+
+Conditions:
+  IsProd: !Equals [!Ref Environment, 'prod']
+  IsStaging: !Equals [!Ref Environment, 'staging']
+  NotificationsEnabled: !Not [!Equals [!Ref NotificationEmail, '']]
+
+Resources:
+  # SNS Topic for alerts
+  AlertsTopic:
+    Type: AWS::SNS::Topic
+    Condition: NotificationsEnabled
+    Properties:
+      TopicName: !Sub '${ProjectName}-alerts-${Environment}'
+      DisplayName: !Sub '${ProjectName} Alerts - ${Environment}'
+      KmsMasterKeyId: alias/aws/sns
+
+  # SNS Subscription for email alerts
+  AlertsSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: NotificationsEnabled
+    Properties:
+      TopicArn: !Ref AlertsTopic
+      Protocol: email
+      Endpoint: !Ref NotificationEmail
+
+  # Lambda Error Rate Alarm
+  LambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-lambda-errors-${Environment}'
+      AlarmDescription: !Sub 'Lambda function error rate alarm for ${LambdaFunctionName}'
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: !If [IsProd, 5, 10]
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref LambdaFunctionName
+      AlarmActions: !If 
+        - NotificationsEnabled
+        - [!Ref AlertsTopic]
+        - []
+      OKActions: !If 
+        - NotificationsEnabled
+        - [!Ref AlertsTopic]
+        - []
+      TreatMissingData: notBreaching
+
+  # Lambda Duration Alarm
+  LambdaDurationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-lambda-duration-${Environment}'
+      AlarmDescription: !Sub 'Lambda function high duration alarm for ${LambdaFunctionName}'
+      MetricName: Duration
+      Namespace: AWS/Lambda
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 3
+      Threshold: !If [IsProd, 5000, 10000]  # 5 seconds for prod, 10 for dev
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref LambdaFunctionName
+      AlarmActions: !If 
+        - NotificationsEnabled
+        - [!Ref AlertsTopic]
+        - []
+      TreatMissingData: notBreaching
+
+  # Lambda Throttles Alarm
+  LambdaThrottlesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-lambda-throttles-${Environment}'
+      AlarmDescription: !Sub 'Lambda function throttles alarm for ${LambdaFunctionName}'
+      MetricName: Throttles
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref LambdaFunctionName
+      AlarmActions: !If 
+        - NotificationsEnabled
+        - [!Ref AlertsTopic]
+        - []
+      TreatMissingData: notBreaching
+
+  # API Gateway 4XX Error Rate Alarm
+  ApiGateway4XXAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-api-4xx-errors-${Environment}'
+      AlarmDescription: !Sub 'API Gateway 4XX error rate alarm'
+      MetricName: 4XXError
+      Namespace: AWS/ApiGatewayV2
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: !If [IsProd, 20, 50]
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ApiId
+          Value: !Ref ApiGatewayId
+        - Name: Stage
+          Value: !Ref ApiGatewayStageName
+      AlarmActions: !If 
+        - NotificationsEnabled
+        - [!Ref AlertsTopic]
+        - []
+      TreatMissingData: notBreaching
+
+  # API Gateway 5XX Error Rate Alarm
+  ApiGateway5XXAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-api-5xx-errors-${Environment}'
+      AlarmDescription: !Sub 'API Gateway 5XX error rate alarm'
+      MetricName: 5XXError
+      Namespace: AWS/ApiGatewayV2
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ApiId
+          Value: !Ref ApiGatewayId
+        - Name: Stage
+          Value: !Ref ApiGatewayStageName
+      AlarmActions: !If 
+        - NotificationsEnabled
+        - [!Ref AlertsTopic]
+        - []
+      TreatMissingData: notBreaching
+
+  # API Gateway Latency Alarm
+  ApiGatewayLatencyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-api-latency-${Environment}'
+      AlarmDescription: !Sub 'API Gateway high latency alarm'
+      MetricName: IntegrationLatency
+      Namespace: AWS/ApiGatewayV2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 3
+      Threshold: !If [IsProd, 2000, 5000]  # 2 seconds for prod, 5 for dev
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ApiId
+          Value: !Ref ApiGatewayId
+        - Name: Stage
+          Value: !Ref ApiGatewayStageName
+      AlarmActions: !If 
+        - NotificationsEnabled
+        - [!Ref AlertsTopic]
+        - []
+      TreatMissingData: notBreaching
+
+  # Custom Authentication Success Rate Alarm
+  AuthSuccessRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-auth-success-rate-${Environment}'
+      AlarmDescription: !Sub 'Authentication success rate alarm'
+      MetricName: AuthenticationSuccess
+      Namespace: !Sub 'AuthServer/${Environment}'
+      Statistic: Sum
+      Period: 900  # 15 minutes
+      EvaluationPeriods: 2
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      AlarmActions: !If 
+        - NotificationsEnabled
+        - [!Ref AlertsTopic]
+        - []
+      TreatMissingData: breaching
+
+  # CloudWatch Dashboard
+  AuthServerDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub '${ProjectName}-${Environment}-dashboard'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/Lambda", "Invocations", "FunctionName", "${LambdaFunctionName}" ],
+                  [ ".", "Errors", ".", "." ],
+                  [ ".", "Duration", ".", "." ],
+                  [ ".", "Throttles", ".", "." ]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "Lambda Metrics",
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/ApiGatewayV2", "Count", "ApiId", "${ApiGatewayId}", "Stage", "${ApiGatewayStageName}" ],
+                  [ ".", "4XXError", ".", ".", ".", "." ],
+                  [ ".", "5XXError", ".", ".", ".", "." ],
+                  [ ".", "IntegrationLatency", ".", ".", ".", "." ]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "API Gateway Metrics",
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 6,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AuthServer/${Environment}", "AuthenticationSuccess" ],
+                  [ ".", "AuthenticationFailure" ]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "Authentication Metrics",
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              }
+            },
+            {
+              "type": "log",
+              "x": 12,
+              "y": 6,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "query": "SOURCE '/aws/lambda/${LambdaFunctionName}'\n| fields @timestamp, @message\n| filter @message like /ERROR/\n| sort @timestamp desc\n| limit 20",
+                "region": "${AWS::Region}",
+                "title": "Recent Errors",
+                "view": "table"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 12,
+              "width": 24,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AuthServer/API/${Environment}", "RequestCount" ],
+                  [ ".", "ErrorCount" ]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "API Request Metrics",
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              }
+            }
+          ]
+        }
+
+  # Composite Alarm for overall health
+  OverallHealthAlarm:
+    Type: AWS::CloudWatch::CompositeAlarm
+    Condition: IsProd
+    Properties:
+      AlarmName: !Sub '${ProjectName}-overall-health-${Environment}'
+      AlarmDescription: !Sub 'Overall health composite alarm for ${ProjectName}'
+      AlarmRule: !Sub |
+        ALARM(${LambdaErrorAlarm}) OR 
+        ALARM(${LambdaDurationAlarm}) OR 
+        ALARM(${ApiGateway5XXAlarm}) OR 
+        ALARM(${LambdaThrottlesAlarm})
+      AlarmActions: !If 
+        - NotificationsEnabled
+        - [!Ref AlertsTopic]
+        - []
+      OKActions: !If 
+        - NotificationsEnabled
+        - [!Ref AlertsTopic]
+        - []
+
+  # Custom metric for error rate calculation
+  ErrorRateMetric:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-error-rate-${Environment}'
+      AlarmDescription: !Sub 'Error rate calculation alarm'
+      MetricName: ErrorRate
+      Namespace: !Sub 'AuthServer/${Environment}'
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: !If [IsProd, 0.05, 0.1]  # 5% for prod, 10% for dev
+      ComparisonOperator: GreaterThanThreshold
+      Metrics:
+        - Id: e1
+          ReturnData: true
+          MetricStat:
+            Metric:
+              Namespace: !Sub 'AuthServer/${Environment}'
+              MetricName: AuthenticationFailure
+            Period: 300
+            Stat: Sum
+        - Id: s1
+          ReturnData: false
+          MetricStat:
+            Metric:
+              Namespace: !Sub 'AuthServer/${Environment}'
+              MetricName: AuthenticationSuccess
+            Period: 300
+            Stat: Sum
+        - Id: total
+          Expression: "e1 + s1"
+          ReturnData: false
+        - Id: rate
+          Expression: "e1 / total"
+          ReturnData: true
+      AlarmActions: !If 
+        - NotificationsEnabled
+        - [!Ref AlertsTopic]
+        - []
+      TreatMissingData: notBreaching
+
+  # Log Insights Queries
+  PerformanceInsightsQuery:
+    Type: AWS::Logs::QueryDefinition
+    Properties:
+      Name: !Sub '${ProjectName}-performance-${Environment}'
+      LogGroupNames:
+        - !Sub '/aws/lambda/${LambdaFunctionName}'
+      QueryString: !Sub |
+        fields @timestamp, @duration
+        | filter @type = "REPORT"
+        | stats avg(@duration), max(@duration), min(@duration) by bin(5m)
+
+  ErrorAnalysisQuery:
+    Type: AWS::Logs::QueryDefinition
+    Properties:
+      Name: !Sub '${ProjectName}-error-analysis-${Environment}'
+      LogGroupNames:
+        - !Sub '/aws/lambda/${LambdaFunctionName}'
+      QueryString: !Sub |
+        fields @timestamp, @message
+        | filter @message like /ERROR/
+        | stats count() by bin(1h)
+
+Outputs:
+  DashboardUrl:
+    Description: CloudWatch Dashboard URL
+    Value: !Sub 'https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${ProjectName}-${Environment}-dashboard'
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-DashboardUrl'
+  
+  AlertsTopicArn:
+    Description: SNS Topic ARN for alerts
+    Value: !If [NotificationsEnabled, !Ref AlertsTopic, 'Not configured']
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-AlertsTopicArn'
+  
+  OverallHealthAlarmArn:
+    Description: Overall health composite alarm ARN
+    Value: !If [IsProd, !GetAtt OverallHealthAlarm.Arn, 'Not configured']
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-OverallHealthAlarmArn' 

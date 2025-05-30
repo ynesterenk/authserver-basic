@@ -1,8 +1,8 @@
 package com.example.auth.infrastructure;
 
 import com.amazonaws.services.lambda.runtime.Context;
-import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
-import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
+import com.amazonaws.services.lambda.runtime.events.APIGatewayV2HTTPEvent;
+import com.amazonaws.services.lambda.runtime.events.APIGatewayV2HTTPResponse;
 import com.example.auth.infrastructure.model.AuthValidationResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeAll;
@@ -95,14 +95,14 @@ class LambdaIntegrationTest {
         }
         
         // Prepare request with valid credentials
-        APIGatewayProxyRequestEvent request = createAuthRequest("POST", "alice", "password123");
+        APIGatewayV2HTTPEvent request = createAuthRequest("POST", "alice", "password123");
         
         // Execute
-        APIGatewayProxyResponseEvent response = lambdaHandler.handleRequest(request, mockContext);
+        APIGatewayV2HTTPResponse response = lambdaHandler.handleRequest(request, mockContext);
         
         // Verify response
         assertEquals(200, response.getStatusCode());
-        assertEquals("application/json", response.getHeaders().get("Content-Type"));
+        assertEquals("application/json", response.getHeaders().get("content-type"));
         
         // Parse response body
         AuthValidationResponse authResponse = objectMapper.readValue(response.getBody(), AuthValidationResponse.class);
@@ -120,10 +120,10 @@ class LambdaIntegrationTest {
         }
         
         // Prepare request with invalid password
-        APIGatewayProxyRequestEvent request = createAuthRequest("POST", "alice", "wrongpassword");
+        APIGatewayV2HTTPEvent request = createAuthRequest("POST", "alice", "wrongpassword");
         
         // Execute
-        APIGatewayProxyResponseEvent response = lambdaHandler.handleRequest(request, mockContext);
+        APIGatewayV2HTTPResponse response = lambdaHandler.handleRequest(request, mockContext);
         
         // Verify response
         assertEquals(200, response.getStatusCode());
@@ -143,10 +143,10 @@ class LambdaIntegrationTest {
         }
         
         // Prepare request with non-existent user
-        APIGatewayProxyRequestEvent request = createAuthRequest("POST", "nonexistent", "password");
+        APIGatewayV2HTTPEvent request = createAuthRequest("POST", "nonexistent", "password");
         
         // Execute
-        APIGatewayProxyResponseEvent response = lambdaHandler.handleRequest(request, mockContext);
+        APIGatewayV2HTTPResponse response = lambdaHandler.handleRequest(request, mockContext);
         
         // Verify response
         assertEquals(200, response.getStatusCode());
@@ -166,10 +166,10 @@ class LambdaIntegrationTest {
         }
         
         // Test with disabled user 'bob'
-        APIGatewayProxyRequestEvent request = createAuthRequest("POST", "bob", "password456");
+        APIGatewayV2HTTPEvent request = createAuthRequest("POST", "bob", "password456");
         
         // Execute
-        APIGatewayProxyResponseEvent response = lambdaHandler.handleRequest(request, mockContext);
+        APIGatewayV2HTTPResponse response = lambdaHandler.handleRequest(request, mockContext);
         
         // Verify response
         assertEquals(200, response.getStatusCode());
@@ -189,13 +189,18 @@ class LambdaIntegrationTest {
         }
         
         // Prepare request without Authorization header
-        APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent()
-                .withHttpMethod("POST")
-                .withPath("/auth/validate")
-                .withHeaders(new HashMap<>());
+        APIGatewayV2HTTPEvent request = APIGatewayV2HTTPEvent.builder()
+                .withRequestContext(APIGatewayV2HTTPEvent.RequestContext.builder()
+                        .withHttp(APIGatewayV2HTTPEvent.RequestContext.Http.builder()
+                                .withMethod("POST")
+                                .withPath("/auth/validate")
+                                .build())
+                        .build())
+                .withHeaders(new HashMap<>())
+                .build();
         
         // Execute
-        APIGatewayProxyResponseEvent response = lambdaHandler.handleRequest(request, mockContext);
+        APIGatewayV2HTTPResponse response = lambdaHandler.handleRequest(request, mockContext);
         
         // Verify response
         assertEquals(400, response.getStatusCode());
@@ -215,10 +220,10 @@ class LambdaIntegrationTest {
         }
         
         // Prepare GET request
-        APIGatewayProxyRequestEvent request = createAuthRequest("GET", "alice", "password123");
+        APIGatewayV2HTTPEvent request = createAuthRequest("GET", "alice", "password123");
         
         // Execute
-        APIGatewayProxyResponseEvent response = lambdaHandler.handleRequest(request, mockContext);
+        APIGatewayV2HTTPResponse response = lambdaHandler.handleRequest(request, mockContext);
         
         // Verify response
         assertEquals(405, response.getStatusCode());
@@ -238,13 +243,18 @@ class LambdaIntegrationTest {
         }
         
         // Prepare request with invalid Basic Auth format
-        APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent()
-                .withHttpMethod("POST")
-                .withPath("/auth/validate")
-                .withHeaders(Map.of("Authorization", "Bearer invalid-token"));
+        APIGatewayV2HTTPEvent request = APIGatewayV2HTTPEvent.builder()
+                .withRequestContext(APIGatewayV2HTTPEvent.RequestContext.builder()
+                        .withHttp(APIGatewayV2HTTPEvent.RequestContext.Http.builder()
+                                .withMethod("POST")
+                                .withPath("/auth/validate")
+                                .build())
+                        .build())
+                .withHeaders(Map.of("authorization", "Bearer invalid-token"))
+                .build();
         
         // Execute
-        APIGatewayProxyResponseEvent response = lambdaHandler.handleRequest(request, mockContext);
+        APIGatewayV2HTTPResponse response = lambdaHandler.handleRequest(request, mockContext);
         
         // Verify response
         assertEquals(400, response.getStatusCode());
@@ -265,13 +275,18 @@ class LambdaIntegrationTest {
         }
         
         // Prepare request with malformed base64 encoding
-        APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent()
-                .withHttpMethod("POST")
-                .withPath("/auth/validate")
-                .withHeaders(Map.of("Authorization", "Basic invalid-base64!@#"));
+        APIGatewayV2HTTPEvent request = APIGatewayV2HTTPEvent.builder()
+                .withRequestContext(APIGatewayV2HTTPEvent.RequestContext.builder()
+                        .withHttp(APIGatewayV2HTTPEvent.RequestContext.Http.builder()
+                                .withMethod("POST")
+                                .withPath("/auth/validate")
+                                .build())
+                        .build())
+                .withHeaders(Map.of("authorization", "Basic invalid-base64!@#"))
+                .build();
         
         // Execute
-        APIGatewayProxyResponseEvent response = lambdaHandler.handleRequest(request, mockContext);
+        APIGatewayV2HTTPResponse response = lambdaHandler.handleRequest(request, mockContext);
         
         // Verify response
         assertEquals(400, response.getStatusCode());
@@ -291,14 +306,14 @@ class LambdaIntegrationTest {
         }
         
         // Prepare valid request
-        APIGatewayProxyRequestEvent request = createAuthRequest("POST", "alice", "password123");
+        APIGatewayV2HTTPEvent request = createAuthRequest("POST", "alice", "password123");
         
         // Execute
-        APIGatewayProxyResponseEvent response = lambdaHandler.handleRequest(request, mockContext);
+        APIGatewayV2HTTPResponse response = lambdaHandler.handleRequest(request, mockContext);
         
         // Verify security headers
         Map<String, String> headers = response.getHeaders();
-        assertEquals("application/json", headers.get("Content-Type"));
+        assertEquals("application/json", headers.get("content-type"));
         assertEquals("no-cache, no-store, must-revalidate", headers.get("Cache-Control"));
         assertEquals("no-cache", headers.get("Pragma"));
         assertEquals("0", headers.get("Expires"));
@@ -313,11 +328,11 @@ class LambdaIntegrationTest {
         }
         
         // Prepare request
-        APIGatewayProxyRequestEvent request = createAuthRequest("POST", "charlie", "charlie789");
+        APIGatewayV2HTTPEvent request = createAuthRequest("POST", "charlie", "charlie789");
         
         // Measure execution time
         long startTime = System.currentTimeMillis();
-        APIGatewayProxyResponseEvent response = lambdaHandler.handleRequest(request, mockContext);
+        APIGatewayV2HTTPResponse response = lambdaHandler.handleRequest(request, mockContext);
         long executionTime = System.currentTimeMillis() - startTime;
         
         // Verify response
@@ -334,19 +349,24 @@ class LambdaIntegrationTest {
     }
 
     /**
-     * Helper method to create authentication requests.
+     * Helper method to create authentication requests for HTTP API v2.
      */
-    private APIGatewayProxyRequestEvent createAuthRequest(String httpMethod, String username, String password) {
+    private APIGatewayV2HTTPEvent createAuthRequest(String httpMethod, String username, String password) {
         String credentials = username + ":" + password;
         String encodedCredentials = Base64.getEncoder().encodeToString(credentials.getBytes());
         
         Map<String, String> headers = new HashMap<>();
-        headers.put("Authorization", "Basic " + encodedCredentials);
-        headers.put("Content-Type", "application/json");
+        headers.put("authorization", "Basic " + encodedCredentials);
+        headers.put("content-type", "application/json");
         
-        return new APIGatewayProxyRequestEvent()
-                .withHttpMethod(httpMethod)
-                .withPath("/auth/validate")
-                .withHeaders(headers);
+        return APIGatewayV2HTTPEvent.builder()
+                .withRequestContext(APIGatewayV2HTTPEvent.RequestContext.builder()
+                        .withHttp(APIGatewayV2HTTPEvent.RequestContext.Http.builder()
+                                .withMethod(httpMethod)
+                                .withPath("/auth/validate")
+                                .build())
+                        .build())
+                .withHeaders(headers)
+                .build();
     }
 } 

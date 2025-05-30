@@ -1,0 +1,26 @@
+[
+  {
+    "ParameterKey": "Environment",
+    "ParameterValue": "prod"
+  },
+  {
+    "ParameterKey": "LambdaMemorySize",
+    "ParameterValue": "1024"
+  },
+  {
+    "ParameterKey": "ApiThrottleRateLimit",
+    "ParameterValue": "500"
+  },
+  {
+    "ParameterKey": "ApiThrottleBurstLimit",
+    "ParameterValue": "1000"
+  },
+  {
+    "ParameterKey": "CacheTtlMinutes",
+    "ParameterValue": "10"
+  },
+  {
+    "ParameterKey": "NotificationEmail",
+    "ParameterValue": "yevgen2005@gmail.com"
+  }
+] 

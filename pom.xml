@@ -23,7 +23,7 @@
         <spring-security.version>6.2.1</spring-security.version>
         <junit.version>5.10.1</junit.version>
         <mockito.version>5.8.0</mockito.version>
-        <jackson.version>2.16.1</jackson.version>
+        <jackson.version>2.15.4</jackson.version>
         <slf4j.version>2.0.9</slf4j.version>
         <logback.version>1.4.14</logback.version>
         <bouncycastle.version>1.77</bouncycastle.version>

@@ -1,0 +1,241 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Lambda function configuration for Java Authorization Server'
+
+Parameters:
+  Environment:
+    Type: String
+    Description: Deployment environment
+  
+  ProjectName:
+    Type: String
+    Description: Project name for resource naming
+  
+  ExecutionRoleArn:
+    Type: String
+    Description: ARN of the Lambda execution role
+  
+  SecretArn:
+    Type: String
+    Description: ARN of the Secrets Manager secret
+  
+  ArtifactBucket:
+    Type: String
+    Description: S3 bucket containing Lambda deployment package
+  
+  ArtifactKey:
+    Type: String
+    Description: S3 key for Lambda ZIP file
+  
+  MemorySize:
+    Type: Number
+    Default: 512
+    Description: Lambda function memory size in MB
+  
+  CacheTtlMinutes:
+    Type: Number
+    Default: 5
+    Description: Cache TTL for user credentials in minutes
+
+Conditions:
+  IsProd: !Equals [!Ref Environment, 'prod']
+  IsStaging: !Equals [!Ref Environment, 'staging']
+
+Resources:
+  # Lambda Function
+  AuthFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-auth-function-${Environment}'
+      Runtime: java21
+      Handler: com.example.auth.infrastructure.LambdaHandler::handleRequest
+      Code:
+        S3Bucket: !Ref ArtifactBucket
+        S3Key: !Ref ArtifactKey
+      MemorySize: !Ref MemorySize
+      Timeout: 30
+      Role: !Ref ExecutionRoleArn
+      Environment:
+        Variables:
+          CREDENTIAL_SECRET_ARN: !Ref SecretArn
+          CACHE_TTL_MINUTES: !Ref CacheTtlMinutes
+          ENVIRONMENT: !Ref Environment
+          LOG_LEVEL: !If [IsProd, 'INFO', 'DEBUG']
+          SPRING_PROFILES_ACTIVE: aws
+          # Java optimization for faster cold starts
+          JAVA_TOOL_OPTIONS: !Sub 
+            - '-XX:+TieredCompilation -XX:TieredStopAtLevel=1 ${MemoryOpts}'
+            - MemoryOpts: !If 
+              - IsProd
+              - '-Xmx450m -XX:MaxMetaspaceSize=128m'
+              - '-Xmx256m -XX:MaxMetaspaceSize=64m'
+      TracingConfig:
+        Mode: Active
+      DeadLetterQueue:
+        TargetArn: !GetAtt DeadLetterQueue.Arn
+      ReservedConcurrencyLimit: !If 
+        - IsProd 
+        - 100
+        - !If [IsStaging, 50, 10]
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Component
+          Value: Lambda
+
+  # Lambda Version for provisioned concurrency
+  AuthFunctionVersion:
+    Type: AWS::Lambda::Version
+    Properties:
+      FunctionName: !Ref AuthFunction
+      Description: !Sub 'Version for ${Environment} environment'
+
+  # Provisioned concurrency for production and staging
+  ProvisionedConcurrency:
+    Type: AWS::Lambda::ProvisionedConcurrencyConfig
+    Condition: IsProd
+    Properties:
+      FunctionName: !Ref AuthFunction
+      ProvisionedConcurrencyLevel: 5
+      Qualifier: !GetAtt AuthFunctionVersion.Version
+
+  # Dead Letter Queue for failed invocations
+  DeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${ProjectName}-dlq-${Environment}'
+      MessageRetentionPeriod: 1209600  # 14 days
+      VisibilityTimeoutSeconds: 60
+      KmsMasterKeyId: alias/aws/sqs
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Component
+          Value: Lambda
+
+  # CloudWatch Log Group with environment-specific retention
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ProjectName}-auth-function-${Environment}'
+      RetentionInDays: !If 
+        - IsProd
+        - 30
+        - !If [IsStaging, 14, 7]
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Component
+          Value: Lambda
+
+  # Lambda Alias for Blue/Green deployments
+  AuthFunctionAlias:
+    Type: AWS::Lambda::Alias
+    Properties:
+      FunctionName: !Ref AuthFunction
+      FunctionVersion: !GetAtt AuthFunctionVersion.Version
+      Name: !Sub '${Environment}'
+      Description: !Sub 'Alias for ${Environment} environment'
+
+  # EventBridge rule for scheduled warm-up (production only)
+  WarmUpRule:
+    Type: AWS::Events::Rule
+    Condition: IsProd
+    Properties:
+      Name: !Sub '${ProjectName}-warmup-${Environment}'
+      Description: 'Scheduled warm-up for Lambda function'
+      ScheduleExpression: 'rate(5 minutes)'
+      State: ENABLED
+      Targets:
+        - Arn: !Sub '${AuthFunction}:${AuthFunctionAlias}'
+          Id: WarmUpTarget
+          Input: !Sub |
+            {
+              "requestContext": {
+                "httpMethod": "GET"
+              },
+              "path": "/health",
+              "isWarmup": true
+            }
+
+  # Permission for EventBridge to invoke Lambda
+  WarmUpPermission:
+    Type: AWS::Lambda::Permission
+    Condition: IsProd
+    Properties:
+      FunctionName: !Sub '${AuthFunction}:${AuthFunctionAlias}'
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt WarmUpRule.Arn
+
+  # Custom metric filter for authentication metrics
+  AuthSuccessMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref LogGroup
+      FilterPattern: '[timestamp, requestId, level="INFO", logger, message="Authentication successful"]'
+      MetricTransformations:
+        - MetricNamespace: !Sub 'AuthServer/${Environment}'
+          MetricName: AuthenticationSuccess
+          MetricValue: '1'
+          DefaultValue: 0
+
+  AuthFailureMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref LogGroup
+      FilterPattern: '[timestamp, requestId, level="INFO", logger, message="Authentication failed"]'
+      MetricTransformations:
+        - MetricNamespace: !Sub 'AuthServer/${Environment}'
+          MetricName: AuthenticationFailure
+          MetricValue: '1'
+          DefaultValue: 0
+
+  # Lambda Insights extension (production only)
+  LambdaInsightsLayer:
+    Type: AWS::Lambda::LayerVersion
+    Condition: IsProd
+    Properties:
+      LayerName: !Sub '${ProjectName}-insights-${Environment}'
+      Description: 'CloudWatch Lambda Insights extension'
+      Content:
+        S3Bucket: !Sub 'cwlogs-lambda-insights-${AWS::Region}'
+        S3Key: 'lambda-insights-extension-1.0.98.0.zip'
+      CompatibleRuntimes:
+        - java21
+
+Outputs:
+  LambdaFunctionArn:
+    Description: ARN of the Lambda function
+    Value: !GetAtt AuthFunction.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-LambdaFunctionArn'
+  
+  LambdaFunctionName:
+    Description: Name of the Lambda function
+    Value: !Ref AuthFunction
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-LambdaFunctionName'
+  
+  LambdaAliasArn:
+    Description: ARN of the Lambda alias
+    Value: !Ref AuthFunctionAlias
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-LambdaAliasArn'
+  
+  DeadLetterQueueArn:
+    Description: ARN of the dead letter queue
+    Value: !GetAtt DeadLetterQueue.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-DeadLetterQueueArn'
+  
+  LogGroupName:
+    Description: Name of the CloudWatch log group
+    Value: !Ref LogGroup
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-LogGroupName' 

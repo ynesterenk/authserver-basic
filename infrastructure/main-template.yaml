@@ -1,0 +1,181 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Java Authorization Server - Complete Infrastructure'
+
+Parameters:
+  Environment:
+    Type: String
+    AllowedValues: [dev, staging, prod]
+    Default: dev
+    Description: Deployment environment
+  
+  ArtifactBucket:
+    Type: String
+    Description: S3 bucket containing Lambda deployment package and nested templates
+  
+  ArtifactKey:
+    Type: String
+    Description: S3 key for Lambda ZIP file
+    Default: auth-server-lambda.zip
+  
+  LambdaMemorySize:
+    Type: Number
+    Default: 512
+    MinValue: 128
+    MaxValue: 3008
+    Description: Lambda function memory size in MB
+  
+  ApiThrottleRateLimit:
+    Type: Number
+    Default: 100
+    Description: API Gateway throttle rate limit (requests per second)
+  
+  ApiThrottleBurstLimit:
+    Type: Number
+    Default: 500
+    Description: API Gateway throttle burst limit
+  
+  CacheTtlMinutes:
+    Type: Number
+    Default: 5
+    MinValue: 1
+    MaxValue: 60
+    Description: Cache TTL for user credentials in minutes
+  
+  NotificationEmail:
+    Type: String
+    Default: ""
+    Description: Email address for CloudWatch alarms (optional)
+
+Conditions:
+  IsProd: !Equals [!Ref Environment, 'prod']
+  IsStaging: !Equals [!Ref Environment, 'staging']
+  NotificationsEnabled: !Not [!Equals [!Ref NotificationEmail, '']]
+
+Resources:
+  # IAM Stack - Creates execution roles and policies
+  IAMStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub 'https://${ArtifactBucket}.s3.amazonaws.com/nested-stacks/iam-stack.yaml'
+      Parameters:
+        Environment: !Ref Environment
+        ProjectName: !Ref AWS::StackName
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: JavaAuthServer
+        - Key: Component
+          Value: IAM
+
+  # Secrets Stack - Creates Secrets Manager for user credentials
+  SecretsStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub 'https://${ArtifactBucket}.s3.amazonaws.com/nested-stacks/secrets-stack-simple.yaml'
+      Parameters:
+        Environment: !Ref Environment
+        ProjectName: !Ref AWS::StackName
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: JavaAuthServer
+        - Key: Component
+          Value: Secrets
+
+  # Lambda Stack - Creates Lambda function and supporting resources
+  LambdaStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: [IAMStack, SecretsStack]
+    Properties:
+      TemplateURL: !Sub 'https://${ArtifactBucket}.s3.amazonaws.com/nested-stacks/lambda-stack-simple.yaml'
+      Parameters:
+        Environment: !Ref Environment
+        ProjectName: !Ref AWS::StackName
+        ExecutionRoleArn: !GetAtt IAMStack.Outputs.LambdaExecutionRoleArn
+        SecretArn: !GetAtt SecretsStack.Outputs.CredentialSecretArn
+        ArtifactBucket: !Ref ArtifactBucket
+        ArtifactKey: !Ref ArtifactKey
+        MemorySize: !Ref LambdaMemorySize
+        CacheTtlMinutes: !Ref CacheTtlMinutes
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: JavaAuthServer
+        - Key: Component
+          Value: Lambda
+
+  # API Gateway Stack - Creates HTTP API Gateway
+  APIGatewayStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: LambdaStack
+    Properties:
+      TemplateURL: !Sub 'https://${ArtifactBucket}.s3.amazonaws.com/nested-stacks/api-gateway-stack-simple.yaml'
+      Parameters:
+        Environment: !Ref Environment
+        ProjectName: !Ref AWS::StackName
+        LambdaFunctionArn: !GetAtt LambdaStack.Outputs.LambdaFunctionArn
+        ThrottleRateLimit: !Ref ApiThrottleRateLimit
+        ThrottleBurstLimit: !Ref ApiThrottleBurstLimit
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: JavaAuthServer
+        - Key: Component
+          Value: API
+
+  # Monitoring Stack - Creates CloudWatch alarms and dashboards
+  # MonitoringStack:
+  #   Type: AWS::CloudFormation::Stack
+  #   DependsOn: [LambdaStack, APIGatewayStack]
+  #   Properties:
+  #     TemplateURL: !Sub 'https://${ArtifactBucket}.s3.amazonaws.com/nested-stacks/monitoring-stack.yaml'
+  #     Parameters:
+  #       Environment: !Ref Environment
+  #       ProjectName: !Ref AWS::StackName
+  #       LambdaFunctionName: !GetAtt LambdaStack.Outputs.LambdaFunctionName
+  #       ApiGatewayId: !GetAtt APIGatewayStack.Outputs.ApiGatewayId
+  #       ApiGatewayStageName: !Ref Environment
+  #       NotificationEmail: !Ref NotificationEmail
+  #     Tags:
+  #       - Key: Environment
+  #         Value: !Ref Environment
+  #       - Key: Project
+  #         Value: JavaAuthServer
+  #       - Key: Component
+  #         Value: Monitoring
+
+Outputs:
+  ApiEndpoint:
+    Description: 'API Gateway endpoint URL'
+    Value: !GetAtt APIGatewayStack.Outputs.ApiEndpoint
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiEndpoint'
+  
+  LambdaFunctionArn:
+    Description: 'Lambda function ARN'
+    Value: !GetAtt LambdaStack.Outputs.LambdaFunctionArn
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaArn'
+  
+  SecretArn:
+    Description: 'Secrets Manager secret ARN'
+    Value: !GetAtt SecretsStack.Outputs.CredentialSecretArn
+    Export:
+      Name: !Sub '${AWS::StackName}-SecretArn'
+  
+  # DashboardUrl:
+  #   Description: 'CloudWatch Dashboard URL'
+  #   Value: !GetAtt MonitoringStack.Outputs.DashboardUrl
+  #   Export:
+  #     Name: !Sub '${AWS::StackName}-DashboardUrl'
+  
+  TestCommand:
+    Description: 'Example curl command for testing'
+    Value: !Sub |
+      curl -X POST ${APIGatewayStack.Outputs.ApiEndpoint}/auth/validate \
+        -H "Authorization: Basic $(echo -n 'alice:password123' | base64)" \
+        -H "Content-Type: application/json" 

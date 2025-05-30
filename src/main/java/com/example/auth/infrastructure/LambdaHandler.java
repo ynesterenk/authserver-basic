@@ -2,8 +2,8 @@ package com.example.auth.infrastructure;
 
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
-import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
-import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
+import com.amazonaws.services.lambda.runtime.events.APIGatewayV2HTTPEvent;
+import com.amazonaws.services.lambda.runtime.events.APIGatewayV2HTTPResponse;
 import com.example.auth.domain.model.AuthenticationRequest;
 import com.example.auth.domain.model.AuthenticationResult;
 import com.example.auth.domain.service.AuthenticatorService;
@@ -22,22 +22,22 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * AWS Lambda handler for processing authentication requests.
+ * AWS Lambda handler for processing authentication requests from HTTP API v2.
  * 
  * This handler:
- * - Processes API Gateway HTTP requests
+ * - Processes API Gateway HTTP API v2 requests
  * - Extracts Basic Authentication credentials
  * - Validates credentials using the domain service
  * - Returns appropriate HTTP responses with proper status codes
  * - Implements structured logging and metrics
  */
-public class LambdaHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
+public class LambdaHandler implements RequestHandler<APIGatewayV2HTTPEvent, APIGatewayV2HTTPResponse> {
 
     private static final Logger logger = LoggerFactory.getLogger(LambdaHandler.class);
     
-    private static final String AUTHORIZATION_HEADER = "Authorization";
+    private static final String AUTHORIZATION_HEADER = "authorization";
     private static final String BASIC_PREFIX = "Basic ";
-    private static final String CONTENT_TYPE = "Content-Type";
+    private static final String CONTENT_TYPE = "content-type";
     private static final String APPLICATION_JSON = "application/json";
     
     private final AuthenticatorService authenticatorService;
@@ -58,15 +58,19 @@ public class LambdaHandler implements RequestHandler<APIGatewayProxyRequestEvent
     @Logging(logEvent = true)
     @Metrics(namespace = "AuthService")
     @Tracing
-    public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent input, Context context) {
+    public APIGatewayV2HTTPResponse handleRequest(APIGatewayV2HTTPEvent input, Context context) {
         long startTime = System.currentTimeMillis();
         
         try {
             logger.info("Processing authentication request - RequestId: {}", context.getAwsRequestId());
+            logger.debug("Request context: method={}, path={}", 
+                        input.getRequestContext().getHttp().getMethod(),
+                        input.getRequestContext().getHttp().getPath());
             
             // Validate HTTP method
-            if (!"POST".equalsIgnoreCase(input.getHttpMethod())) {
-                logger.warn("Invalid HTTP method: {}", input.getHttpMethod());
+            String httpMethod = input.getRequestContext().getHttp().getMethod();
+            if (!"POST".equalsIgnoreCase(httpMethod)) {
+                logger.warn("Invalid HTTP method: {}", httpMethod);
                 return createErrorResponse(405, "Method Not Allowed", "Only POST method is supported");
             }
             
@@ -88,7 +92,7 @@ public class LambdaHandler implements RequestHandler<APIGatewayProxyRequestEvent
             AuthenticationResult result = authenticatorService.authenticate(authRequest);
             
             // Create response
-            APIGatewayProxyResponseEvent response = createAuthResponse(result);
+            APIGatewayV2HTTPResponse response = createAuthResponse(result);
             
             long duration = System.currentTimeMillis() - startTime;
             logger.info("Authentication completed - Success: {}, Duration: {}ms", 
@@ -127,7 +131,7 @@ public class LambdaHandler implements RequestHandler<APIGatewayProxyRequestEvent
     /**
      * Extracts Authorization header from API Gateway request.
      */
-    private String extractAuthorizationHeader(APIGatewayProxyRequestEvent input) {
+    private String extractAuthorizationHeader(APIGatewayV2HTTPEvent input) {
         Map<String, String> headers = input.getHeaders();
         if (headers == null) {
             return null;
@@ -136,7 +140,7 @@ public class LambdaHandler implements RequestHandler<APIGatewayProxyRequestEvent
         // Check both Authorization and authorization (case-insensitive)
         String authHeader = headers.get(AUTHORIZATION_HEADER);
         if (authHeader == null) {
-            authHeader = headers.get(AUTHORIZATION_HEADER.toLowerCase());
+            authHeader = headers.get("Authorization");
         }
         
         return authHeader;
@@ -183,7 +187,7 @@ public class LambdaHandler implements RequestHandler<APIGatewayProxyRequestEvent
     /**
      * Creates HTTP response for authentication result.
      */
-    private APIGatewayProxyResponseEvent createAuthResponse(AuthenticationResult result) {
+    private APIGatewayV2HTTPResponse createAuthResponse(AuthenticationResult result) {
         try {
             AuthValidationResponse responseBody = new AuthValidationResponse(
                 result.isAllowed(),
@@ -199,10 +203,11 @@ public class LambdaHandler implements RequestHandler<APIGatewayProxyRequestEvent
             headers.put("Pragma", "no-cache");
             headers.put("Expires", "0");
             
-            return new APIGatewayProxyResponseEvent()
+            return APIGatewayV2HTTPResponse.builder()
                     .withStatusCode(200)
                     .withHeaders(headers)
-                    .withBody(jsonBody);
+                    .withBody(jsonBody)
+                    .build();
                     
         } catch (Exception e) {
             logger.error("Error creating authentication response", e);
@@ -213,7 +218,7 @@ public class LambdaHandler implements RequestHandler<APIGatewayProxyRequestEvent
     /**
      * Creates error response with proper HTTP status code.
      */
-    private APIGatewayProxyResponseEvent createErrorResponse(int statusCode, String error, String message) {
+    private APIGatewayV2HTTPResponse createErrorResponse(int statusCode, String error, String message) {
         try {
             AuthValidationResponse errorBody = new AuthValidationResponse(
                 false,
@@ -226,17 +231,19 @@ public class LambdaHandler implements RequestHandler<APIGatewayProxyRequestEvent
             Map<String, String> headers = new HashMap<>();
             headers.put(CONTENT_TYPE, APPLICATION_JSON);
             
-            return new APIGatewayProxyResponseEvent()
+            return APIGatewayV2HTTPResponse.builder()
                     .withStatusCode(statusCode)
                     .withHeaders(headers)
-                    .withBody(jsonBody);
+                    .withBody(jsonBody)
+                    .build();
                     
         } catch (Exception e) {
             logger.error("Error creating error response", e);
             // Fallback to plain text response
-            return new APIGatewayProxyResponseEvent()
+            return APIGatewayV2HTTPResponse.builder()
                     .withStatusCode(statusCode)
-                    .withBody("{\"allowed\":false,\"message\":\"" + message + "\"}");
+                    .withBody("{\"allowed\":false,\"message\":\"" + message + "\"}")
+                    .build();
         }
     }
     
