@@ -49,7 +49,6 @@ Parameters:
 Conditions:
   IsProd: !Equals [!Ref Environment, 'prod']
   IsStaging: !Equals [!Ref Environment, 'staging']
-  NotificationsEnabled: !Not [!Equals [!Ref NotificationEmail, '']]
 
 Resources:
   # IAM Stack - Creates execution roles and policies
@@ -87,7 +86,6 @@ Resources:
   # Lambda Stack - Creates Lambda function and supporting resources
   LambdaStack:
     Type: AWS::CloudFormation::Stack
-    DependsOn: [IAMStack, SecretsStack]
     Properties:
       TemplateURL: !Sub 'https://${ArtifactBucket}.s3.amazonaws.com/nested-stacks/lambda-stack-simple.yaml'
       Parameters:
@@ -110,7 +108,6 @@ Resources:
   # API Gateway Stack - Creates HTTP API Gateway
   APIGatewayStack:
     Type: AWS::CloudFormation::Stack
-    DependsOn: LambdaStack
     Properties:
       TemplateURL: !Sub 'https://${ArtifactBucket}.s3.amazonaws.com/nested-stacks/api-gateway-stack-simple.yaml'
       Parameters:
