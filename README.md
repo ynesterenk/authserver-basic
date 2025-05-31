@@ -464,3 +464,20 @@ This project is part of the AWS to Azure Migration initiative.
 **Generated on**: May 30, 2025  
 **Project Phase**: Step 2 - AWS Lambda Integration ✅  
 **Test Status**: 31/31 tests passing 
+
+## 📚 Documentation
+
+### Architecture Documentation
+- [Architecture Overview](docs/architecture.md) - System design and component interaction
+- [AWS Integration](docs/aws-integration.md) - Lambda and API Gateway configuration
+- [Security Model](docs/security.md) - Authentication flow and security considerations
+
+### Implementation Documentation  
+- [API Documentation](docs/api-documentation.md) - REST API endpoints and examples
+- [Testing Guide](docs/testing.md) - Unit tests and integration tests
+- [Deployment Guide](CICD-SETUP.md) - Complete CI/CD setup instructions
+- [CI/CD Implementation Report](reports/step-3-implementation-cicd-report.md) - Detailed fixes and implementation steps
+
+### Development Documentation
+- [Local Development](docs/local-development.md) - Running the application locally
+- [Monitoring](docs/monitoring.md) - CloudWatch logs and metrics 
