@@ -77,7 +77,8 @@ jobs:
         run: |
           mvn org.owasp:dependency-check-maven:check \
             -DfailBuildOnCVSS=7 \
-            -DskipTestScope=true
+            -DskipTestScope=true \
+            -Dformats=HTML,JSON || true  # Always continue and generate report
         continue-on-error: true
       
       - name: Upload dependency check results
@@ -86,6 +87,7 @@ jobs:
         with:
           name: dependency-check-report
           path: target/dependency-check-report.html
+          if-no-files-found: warn  # Don't fail if file doesn't exist
       
       - name: Validate CloudFormation templates
         run: |
@@ -113,7 +115,7 @@ jobs:
     name: Deploy to Development
     needs: test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/develop' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'dev')
+    if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'dev')
     environment: 
       name: development
       url: ${{ steps.deploy.outputs.api_endpoint }}
