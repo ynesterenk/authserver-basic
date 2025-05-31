@@ -23,7 +23,6 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  ACCOUNT_ID: 545009823602
   ARTIFACT_BUCKET_PREFIX: auth-server-artifacts
 
 jobs:
@@ -43,7 +42,7 @@ jobs:
           distribution: 'corretto'
       
       - name: Cache Maven dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.m2
           key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
@@ -61,7 +60,7 @@ jobs:
           reporter: java-junit
       
       - name: Upload test results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: test-results
@@ -77,7 +76,7 @@ jobs:
         continue-on-error: true
       
       - name: Upload dependency check results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: dependency-check-report
@@ -98,7 +97,7 @@ jobs:
         run: mvn clean package -DskipTests
       
       - name: Upload Lambda artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: lambda-package
           path: target/auth-server-lambda.jar
@@ -117,9 +116,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
-      - name: Download Lambda artifact
-        uses: actions/download-artifact@v3
+        - name: Download Lambda artifact
+        uses: actions/download-artifact@v4
         with:
           name: lambda-package
           path: target/
@@ -135,7 +133,9 @@ jobs:
         id: deploy
         run: |
           chmod +x scripts/deploy.sh
-          ./scripts/deploy.sh dev ${{ env.AWS_REGION }} ${{ env.ARTIFACT_BUCKET_PREFIX }} ${{ env.ACCOUNT_ID }}
+          # Get AWS Account ID dynamically
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          ./scripts/deploy.sh dev ${{ env.AWS_REGION }} ${{ env.ARTIFACT_BUCKET_PREFIX }} $ACCOUNT_ID
           
           # Extract API endpoint from deployment info
           API_ENDPOINT=$(jq -r '.apiEndpoint' deployment-info-dev.json)
@@ -144,10 +144,10 @@ jobs:
       - name: Run smoke tests
         run: |
           chmod +x scripts/smoke-test.sh
-          ./scripts/smoke-test.sh dev ${{ env.AWS_REGION }} ${{ steps.deploy.outputs.api_endpoint }}
+          ./scripts/smoke-test.sh dev ${{ env.AWS_REGION }}
       
       - name: Upload deployment info
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: deployment-info-dev
           path: deployment-info-dev.json
@@ -165,9 +165,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
-      - name: Download Lambda artifact
-        uses: actions/download-artifact@v3
+        - name: Download Lambda artifact
+        uses: actions/download-artifact@v4
         with:
           name: lambda-package
           path: target/
@@ -183,7 +182,9 @@ jobs:
         id: deploy
         run: |
           chmod +x scripts/deploy.sh
-          ./scripts/deploy.sh staging ${{ env.AWS_REGION }} ${{ env.ARTIFACT_BUCKET_PREFIX }} ${{ env.ACCOUNT_ID }}
+          # Get AWS Account ID dynamically
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          ./scripts/deploy.sh staging ${{ env.AWS_REGION }} ${{ env.ARTIFACT_BUCKET_PREFIX }} $ACCOUNT_ID
           
           # Extract API endpoint from deployment info
           API_ENDPOINT=$(jq -r '.apiEndpoint' deployment-info-staging.json)
@@ -192,10 +193,10 @@ jobs:
       - name: Run smoke tests
         run: |
           chmod +x scripts/smoke-test.sh
-          ./scripts/smoke-test.sh staging ${{ env.AWS_REGION }} ${{ steps.deploy.outputs.api_endpoint }}
+          ./scripts/smoke-test.sh staging ${{ env.AWS_REGION }}
       
       - name: Upload deployment info
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: deployment-info-staging
           path: deployment-info-staging.json
@@ -213,9 +214,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
-      - name: Download Lambda artifact
-        uses: actions/download-artifact@v3
+        - name: Download Lambda artifact
+        uses: actions/download-artifact@v4
         with:
           name: lambda-package
           path: target/
@@ -231,7 +231,9 @@ jobs:
         id: deploy
         run: |
           chmod +x scripts/deploy.sh
-          ./scripts/deploy.sh prod ${{ env.AWS_REGION }} ${{ env.ARTIFACT_BUCKET_PREFIX }} ${{ env.ACCOUNT_ID }}
+          # Get AWS Account ID dynamically
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          ./scripts/deploy.sh prod ${{ env.AWS_REGION }} ${{ env.ARTIFACT_BUCKET_PREFIX }} $ACCOUNT_ID
           
           # Extract API endpoint from deployment info
           API_ENDPOINT=$(jq -r '.apiEndpoint' deployment-info-prod.json)
@@ -240,22 +242,20 @@ jobs:
       - name: Run smoke tests
         run: |
           chmod +x scripts/smoke-test.sh
-          ./scripts/smoke-test.sh prod ${{ env.AWS_REGION }} ${{ steps.deploy.outputs.api_endpoint }}
+          ./scripts/smoke-test.sh prod ${{ env.AWS_REGION }}
       
       - name: Upload deployment info
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: deployment-info-prod
           path: deployment-info-prod.json
       
       - name: Create GitHub release
         if: github.ref == 'refs/heads/main'
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ github.run_number }}
-          release_name: Release v${{ github.run_number }}
+          name: Release v${{ github.run_number }}
           body: |
             ## Java Authorization Server - Production Release
             
@@ -275,7 +275,6 @@ jobs:
             ### Deployment Info
             - Stack Name: java-auth-server-prod
             - Region: ${{ env.AWS_REGION }}
-            - Account ID: ${{ env.ACCOUNT_ID }}
           draft: false
           prerelease: false
 

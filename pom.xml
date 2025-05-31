@@ -267,9 +267,10 @@
             <plugin>
                 <groupId>org.owasp</groupId>
                 <artifactId>dependency-check-maven</artifactId>
-                <version>9.0.7</version>
-                <configuration>
+                <version>9.1.0</version>
+                 <configuration>                    
                     <failBuildOnCVSS>7</failBuildOnCVSS>
+                     <nvdApiDelay>2000</nvdApiDelay> <!-- 2 seconds between requests -->
                 </configuration>
             </plugin>
 

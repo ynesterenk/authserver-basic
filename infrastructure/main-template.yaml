@@ -56,7 +56,7 @@ Resources:
   IAMStack:
     Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: !Sub 'https://${ArtifactBucket}.s3.amazonaws.com/nested-stacks/iam-stack.yaml'
+      TemplateURL: !Sub 'https://${ArtifactBucket}.s3.amazonaws.com/nested-stacks/iam-stack-simple.yaml'
       Parameters:
         Environment: !Ref Environment
         ProjectName: !Ref AWS::StackName
