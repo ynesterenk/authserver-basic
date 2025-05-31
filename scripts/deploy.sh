@@ -128,7 +128,35 @@ aws cloudformation validate-template \
 
 print_success "CloudFormation template validation passed"
 
-# Step 6: Deploy the stack
+# Step 6: Check and delete existing stack if it exists (for dev environment)
+if [[ "$ENVIRONMENT" == "dev" ]]; then
+    print_status "Checking for existing stack..."
+    STACK_STATUS=$(aws cloudformation describe-stacks \
+        --stack-name "${STACK_NAME}" \
+        --region "${REGION}" \
+        --query 'Stacks[0].StackStatus' \
+        --output text 2>/dev/null || echo "NOT_FOUND")
+    
+    if [[ "$STACK_STATUS" != "NOT_FOUND" ]]; then
+        print_warning "Existing stack found with status: $STACK_STATUS"
+        print_status "Deleting existing stack: $STACK_NAME"
+        
+        aws cloudformation delete-stack \
+            --stack-name "${STACK_NAME}" \
+            --region "${REGION}"
+        
+        print_status "Waiting for stack deletion to complete..."
+        aws cloudformation wait stack-delete-complete \
+            --stack-name "${STACK_NAME}" \
+            --region "${REGION}"
+        
+        print_success "Stack deleted successfully"
+    else
+        print_status "No existing stack found, proceeding with creation"
+    fi
+fi
+
+# Step 7: Deploy the stack
 print_status "Deploying CloudFormation stack..."
 
 # Read parameters from environment-specific file
@@ -160,7 +188,7 @@ aws cloudformation deploy \
 # Clean up temp file
 rm "$TEMP_PARAMS"
 
-# Step 7: Get stack outputs
+# Step 8: Get stack outputs
 print_status "Retrieving stack outputs..."
 OUTPUTS=$(aws cloudformation describe-stacks \
     --stack-name "${STACK_NAME}" \
