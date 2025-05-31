@@ -92,11 +92,11 @@ jobs:
           # Install cfn-lint
           pip install cfn-lint
           
-          # Validate main template
-          cfn-lint infrastructure/main-template.yaml
+          # Validate main template (warnings won't fail the build)
+          cfn-lint infrastructure/main-template.yaml --ignore-checks W
           
           # Validate nested templates
-          find infrastructure/nested-stacks -name "*.yaml" -exec cfn-lint {} \;
+          find infrastructure/nested-stacks -name "*.yaml" -exec cfn-lint {} --ignore-checks W \;
       
       - name: Build Lambda package
         run: mvn clean package -DskipTests

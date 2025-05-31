@@ -40,15 +40,6 @@ Parameters:
     MinValue: 1
     MaxValue: 60
     Description: Cache TTL for user credentials in minutes
-  
-  NotificationEmail:
-    Type: String
-    Default: ""
-    Description: Email address for CloudWatch alarms (optional)
-
-Conditions:
-  IsProd: !Equals [!Ref Environment, 'prod']
-  IsStaging: !Equals [!Ref Environment, 'staging']
 
 Resources:
   # IAM Stack - Creates execution roles and policies
