@@ -1,9 +1,9 @@
 {
-    "artifactLocation":  "s3://auth-server-artifacts-545009823602-us-east-1/auth-server-dev-20250531-093942.zip",
-    "timestamp":  "20250531-093942",
+    "artifactLocation":  "s3://auth-server-artifacts-545009823602-us-east-1/auth-server-dev-20250531-103820.zip",
+    "timestamp":  "20250531-103820",
     "accountId":  "545009823602",
     "environment":  "dev",
-    "apiEndpoint":  "https://bavx4n7jd7.execute-api.us-east-1.amazonaws.com/dev",
+    "apiEndpoint":  "https://2no7vkxfgi.execute-api.us-east-1.amazonaws.com/dev",
     "dashboardUrl":  null,
     "region":  "us-east-1",
     "stackName":  "java-auth-server-dev"
