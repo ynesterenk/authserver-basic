@@ -67,8 +67,16 @@ public class LambdaHandler implements RequestHandler<APIGatewayV2HTTPEvent, APIG
                         input.getRequestContext().getHttp().getMethod(),
                         input.getRequestContext().getHttp().getPath());
             
-            // Validate HTTP method
+            // Check for health endpoint
             String httpMethod = input.getRequestContext().getHttp().getMethod();
+            String path = input.getRequestContext().getHttp().getPath();
+            
+            if ("GET".equalsIgnoreCase(httpMethod) && "/health".equals(path)) {
+                logger.info("Health check request received");
+                return createHealthResponse();
+            }
+            
+            // Validate HTTP method for authentication
             if (!"POST".equalsIgnoreCase(httpMethod)) {
                 logger.warn("Invalid HTTP method: {}", httpMethod);
                 return createErrorResponse(405, "Method Not Allowed", "Only POST method is supported");
@@ -212,6 +220,36 @@ public class LambdaHandler implements RequestHandler<APIGatewayV2HTTPEvent, APIG
         } catch (Exception e) {
             logger.error("Error creating authentication response", e);
             return createErrorResponse(500, "Internal Server Error", "Error processing response");
+        }
+    }
+    
+    /**
+     * Creates health check response.
+     */
+    private APIGatewayV2HTTPResponse createHealthResponse() {
+        Map<String, Object> healthBody = new HashMap<>();
+        healthBody.put("status", "healthy");
+        healthBody.put("timestamp", System.currentTimeMillis());
+        healthBody.put("service", "auth-server");
+        
+        try {
+            String jsonBody = objectMapper.writeValueAsString(healthBody);
+            
+            Map<String, String> headers = new HashMap<>();
+            headers.put(CONTENT_TYPE, APPLICATION_JSON);
+            
+            return APIGatewayV2HTTPResponse.builder()
+                    .withStatusCode(200)
+                    .withHeaders(headers)
+                    .withBody(jsonBody)
+                    .build();
+                    
+        } catch (Exception e) {
+            logger.error("Error creating health response", e);
+            return APIGatewayV2HTTPResponse.builder()
+                    .withStatusCode(200)
+                    .withBody("{\"status\":\"healthy\"}")
+                    .build();
         }
     }
     

@@ -34,6 +34,11 @@ Resources:
                 Action:
                   - secretsmanager:GetSecretValue
                 Resource: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:*'
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:DescribeKey
+                Resource: '*'  # You can restrict this to specific KMS key ARNs if needed
       Tags:
         - Key: Environment
           Value: !Ref Environment
