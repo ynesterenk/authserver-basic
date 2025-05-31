@@ -63,15 +63,22 @@ fi
 
 # Step 1: Build and package the Lambda function
 print_status "Building Lambda function..."
-mvn clean package -DskipTests -q
 
-# Check if the JAR was created
-if [[ ! -f "target/auth-server-lambda.jar" ]]; then
-    print_error "Lambda JAR file not found. Build may have failed."
-    exit 1
+# Check if the JAR already exists (e.g., from CI/CD pipeline)
+if [[ -f "target/auth-server-lambda.jar" ]]; then
+    print_success "Lambda JAR already exists, skipping build"
+else
+    print_status "Building Lambda function..."
+    mvn clean package -DskipTests -q
+    
+    # Check if the JAR was created
+    if [[ ! -f "target/auth-server-lambda.jar" ]]; then
+        print_error "Lambda JAR file not found. Build may have failed."
+        exit 1
+    fi
+    
+    print_success "Lambda function built successfully"
 fi
-
-print_success "Lambda function built successfully"
 
 # Step 2: Create S3 bucket if it doesn't exist
 print_status "Checking artifact bucket..."

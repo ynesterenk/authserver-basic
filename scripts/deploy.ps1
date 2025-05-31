@@ -87,23 +87,30 @@ if (-not (Test-Path "pom.xml") -or -not (Test-Path "infrastructure")) {
 
 # Step 1: Build and package the Lambda function
 Write-Status "Building Lambda function..."
-try {
-    mvn clean package -DskipTests -q
-    if ($LASTEXITCODE -ne 0) {
-        throw "Maven build failed"
+
+# Check if the JAR already exists (e.g., from CI/CD pipeline)
+if (Test-Path "target/auth-server-lambda.jar") {
+    Write-Success "Lambda JAR already exists, skipping build"
+} else {
+    Write-Status "Building Lambda function..."
+    try {
+        mvn clean package -DskipTests -q
+        if ($LASTEXITCODE -ne 0) {
+            throw "Maven build failed"
+        }
+    } catch {
+        Write-Error "Failed to build Lambda function: $_"
+        exit 1
     }
-} catch {
-    Write-Error "Failed to build Lambda function: $_"
-    exit 1
+    
+    # Check if the JAR was created
+    if (-not (Test-Path "target/auth-server-lambda.jar")) {
+        Write-Error "Lambda JAR file not found. Build may have failed."
+        exit 1
+    }
+    
+    Write-Success "Lambda function built successfully"
 }
-
-# Check if the JAR was created
-if (-not (Test-Path "target/auth-server-lambda.jar")) {
-    Write-Error "Lambda JAR file not found. Build may have failed."
-    exit 1
-}
-
-Write-Success "Lambda function built successfully"
 
 # Step 2: Create S3 bucket if it doesn't exist
 Write-Status "Checking artifact bucket..."
