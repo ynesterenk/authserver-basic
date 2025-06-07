@@ -34,6 +34,10 @@
         <aws-sdk.version>2.21.29</aws-sdk.version>
         <lambda-powertools.version>1.18.0</lambda-powertools.version>
         <testcontainers.version>1.19.3</testcontainers.version>
+        
+        <!-- OAuth 2.0 / JWT versions -->
+        <jjwt.version>0.12.3</jjwt.version>
+        <commons-codec.version>1.16.0</commons-codec.version>
     </properties>
 
     <dependencies>
@@ -141,6 +145,39 @@
             <groupId>com.github.ben-manes.caffeine</groupId>
             <artifactId>caffeine</artifactId>
             <version>3.1.8</version>
+        </dependency>
+
+        <!-- OAuth 2.0 / JWT Dependencies -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>${jjwt.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>${jjwt.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>${jjwt.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+        
+        <!-- Apache Commons Codec for secure token generation -->
+        <dependency>
+            <groupId>commons-codec</groupId>
+            <artifactId>commons-codec</artifactId>
+            <version>${commons-codec.version}</version>
+        </dependency>
+        
+        <!-- Spring Security OAuth2 Core for token utilities -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-oauth2-core</artifactId>
+            <version>${spring-security.version}</version>
         </dependency>
 
         <!-- Test Dependencies -->

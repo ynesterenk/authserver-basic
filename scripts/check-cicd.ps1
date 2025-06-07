@@ -38,10 +38,10 @@ function Test-RequiredFile {
     )
     
     if (Test-Path $FilePath) {
-        Write-ValidationMessage "OK: $Description found: $FilePath" "Success"
+        Write-ValidationMessage "✓ $Description found: $FilePath" "Success"
         return $true
     } else {
-        Write-ValidationMessage "MISSING: $Description missing: $FilePath" "Error"
+        Write-ValidationMessage "✗ $Description missing: $FilePath" "Error"
         return $false
     }
 }
@@ -56,19 +56,14 @@ Write-ValidationMessage "Checking GitHub Actions workflow..." "Info"
 $workflowExists = Test-RequiredFile ".github/workflows/deploy.yml" "GitHub Actions workflow"
 
 if ($workflowExists) {
-    try {
-        $workflowContent = Get-Content ".github/workflows/deploy.yml" -Raw
-        $requiredJobs = @("test", "deploy-dev", "deploy-staging", "deploy-prod")
-        foreach ($job in $requiredJobs) {
-            if ($workflowContent -match "${job}:") {
-                Write-ValidationMessage "OK: Job '$job' found in workflow" "Success"
-            } else {
-                Write-ValidationMessage "MISSING: Job '$job' missing from workflow" "Error"
-            }
+    $workflowContent = Get-Content ".github/workflows/deploy.yml" -Raw
+    $requiredJobs = @("test", "deploy-dev", "deploy-staging", "deploy-prod")
+    foreach ($job in $requiredJobs) {
+        if ($workflowContent -match "${job}:") {
+            Write-ValidationMessage "✓ Job '$job' found in workflow" "Success"
+        } else {
+            Write-ValidationMessage "✗ Job '$job' missing from workflow" "Error"
         }
-    }
-    catch {
-        Write-ValidationMessage "ERROR: Could not read workflow file" "Error"
     }
 }
 
@@ -85,7 +80,7 @@ $infraFiles = @{
 }
 
 foreach ($file in $infraFiles.GetEnumerator()) {
-    Test-RequiredFile $file.Key $file.Value | Out-Null
+    Test-RequiredFile $file.Key $file.Value
 }
 
 Write-Host ""
@@ -99,7 +94,7 @@ $paramFiles = @{
 }
 
 foreach ($file in $paramFiles.GetEnumerator()) {
-    Test-RequiredFile $file.Key $file.Value | Out-Null
+    Test-RequiredFile $file.Key $file.Value
 }
 
 Write-Host ""
@@ -113,24 +108,24 @@ $scriptFiles = @{
 }
 
 foreach ($file in $scriptFiles.GetEnumerator()) {
-    Test-RequiredFile $file.Key $file.Value | Out-Null
+    Test-RequiredFile $file.Key $file.Value
 }
 
 Write-Host ""
 
 # 5. Project Configuration
 Write-ValidationMessage "Checking project configuration..." "Info"
-Test-RequiredFile "pom.xml" "Maven POM file" | Out-Null
-Test-RequiredFile "CICD-SETUP.md" "CI/CD setup documentation" | Out-Null
+Test-RequiredFile "pom.xml" "Maven POM file"
+Test-RequiredFile "CICD-SETUP.md" "CI/CD setup documentation"
 
 Write-Host ""
 
 # 6. Build Artifacts (Optional)
 Write-ValidationMessage "Checking build artifacts..." "Info"
 if (Test-Path "target/auth-server-lambda.jar") {
-    Write-ValidationMessage "OK: Lambda JAR already built" "Success"
+    Write-ValidationMessage "✓ Lambda JAR already built" "Success"
 } else {
-    Write-ValidationMessage "INFO: Lambda JAR not found (will be built during CI)" "Warning"
+    Write-ValidationMessage "ℹ Lambda JAR not found (will be built during CI)" "Warning"
 }
 
 Write-Host ""
@@ -139,14 +134,13 @@ Write-Host ""
 Write-ValidationMessage "Checking AWS CLI availability..." "Info"
 try {
     $awsVersion = aws --version 2>&1
-    if ($?) {
-        Write-ValidationMessage "OK: AWS CLI available" "Success"
+    if ($LASTEXITCODE -eq 0) {
+        Write-ValidationMessage "✓ AWS CLI available: $($awsVersion.Split()[0])" "Success"
     } else {
-        Write-ValidationMessage "WARNING: AWS CLI not found (needed for local deployment)" "Warning"
+        Write-ValidationMessage "⚠ AWS CLI not found (needed for local deployment)" "Warning"
     }
-}
-catch {
-    Write-ValidationMessage "WARNING: AWS CLI not available (needed for local deployment)" "Warning"
+} catch {
+    Write-ValidationMessage "⚠ AWS CLI not available (needed for local deployment)" "Warning"
 }
 
 Write-Host ""
@@ -154,7 +148,7 @@ Write-Host ""
 # Summary
 Write-Host "============================================" -ForegroundColor $Colors.Header
 if ($script:ValidationFailed) {
-    Write-Host "    CICD VALIDATION FAILED" -ForegroundColor $Colors.Error
+    Write-Host "    ❌ CI/CD VALIDATION FAILED" -ForegroundColor $Colors.Error
     Write-Host "============================================`n" -ForegroundColor $Colors.Header
     Write-ValidationMessage "Some required components are missing or misconfigured." "Error"
     Write-Host ""
@@ -163,14 +157,13 @@ if ($script:ValidationFailed) {
     Write-Host ""
     exit 1
 } else {
-    Write-Host "    CICD VALIDATION PASSED" -ForegroundColor $Colors.Success
+    Write-Host "    ✅ CI/CD VALIDATION PASSED" -ForegroundColor $Colors.Success
     Write-Host "============================================`n" -ForegroundColor $Colors.Header
     Write-ValidationMessage "All CI/CD components are properly configured!" "Success"
-    Write-Host ""
     Write-Host "Next steps:"
     Write-Host "1. Configure GitHub repository secrets (see CICD-SETUP.md)"
-    Write-Host "2. Push to develop branch to test development deployment"
-    Write-Host "3. Create PR to main branch for staging/production deployment"
+    Write-Host "2. Push to 'develop' branch to test development deployment"
+    Write-Host "3. Create PR to 'main' for staging/production deployment"
     Write-Host ""
     exit 0
-} 
+}
