@@ -1,6 +1,23 @@
+# PowerShell deployment script for Java Authentication Server with OAuth2 support
+# 
+# This script deploys a comprehensive authentication solution including:
+# - Basic Authentication (existing functionality)
+# - OAuth2 Client Credentials Grant flow (new functionality)
+# - Token introspection endpoint
+# 
+# Currently restricted to 'dev' environment only.
+# 
+# The deployment creates:
+# - Lambda function for Basic Auth: com.example.auth.infrastructure.LambdaHandler
+# - Lambda function for OAuth2: com.example.auth.infrastructure.oauth.OAuth2LambdaHandler  
+# - API Gateway with endpoints: /auth, /oauth/token, /oauth/introspect
+# - CloudWatch log groups (monitoring stack disabled)
+# 
+# Usage: .\scripts\deploy.ps1 [dev] [region] [bucket-prefix] [account-id]
+
 param(
     [Parameter(Position=0)]
-    [ValidateSet("dev", "staging", "prod")]
+    [ValidateSet("dev")]
     [string]$Environment = "dev",
     
     [Parameter(Position=1)]
@@ -60,11 +77,13 @@ $ArtifactBucket = "$ArtifactBucketPrefix-$AccountId-$Region"
 $Timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $ArtifactKey = "auth-server-$Environment-$Timestamp.zip"
 
-Write-Status "Starting deployment for environment: $Environment"
+Write-Status "Starting OAuth2-enabled authentication server deployment"
+Write-Status "Environment: $Environment (OAuth2 deployment enabled)"
 Write-Status "Region: $Region"
 Write-Status "Account ID: $AccountId"
 Write-Status "Stack Name: $StackName"
 Write-Status "Artifact Bucket: $ArtifactBucket"
+Write-Status "Deploying: Basic Auth + OAuth2 Client Credentials Grant"
 
 # Check if AWS CLI is configured
 try {
@@ -85,31 +104,35 @@ if (-not (Test-Path "pom.xml") -or -not (Test-Path "infrastructure")) {
     exit 1
 }
 
-# Step 1: Build and package the Lambda function
-Write-Status "Building Lambda function..."
+# Step 1: Build and package the Lambda functions (Basic Auth + OAuth2)
+Write-Status "Building Lambda functions (Basic Auth + OAuth2)..."
 
 # Check if the JAR already exists (e.g., from CI/CD pipeline)
-if (Test-Path "target/auth-server-lambda.jar") {
+if (Test-Path "target/java-auth-server-1.0.0-SNAPSHOT.jar") {
     Write-Success "Lambda JAR already exists, skipping build"
 } else {
-    Write-Status "Building Lambda function..."
+    Write-Status "Building Lambda functions..."
     try {
         mvn clean package -DskipTests -q
         if ($LASTEXITCODE -ne 0) {
             throw "Maven build failed"
         }
     } catch {
-        Write-Error "Failed to build Lambda function: $_"
+        Write-Error "Failed to build Lambda functions: $_"
         exit 1
     }
     
     # Check if the JAR was created
-    if (-not (Test-Path "target/auth-server-lambda.jar")) {
+    if (-not (Test-Path "target/java-auth-server-1.0.0-SNAPSHOT.jar")) {
         Write-Error "Lambda JAR file not found. Build may have failed."
         exit 1
     }
     
-    Write-Success "Lambda function built successfully"
+    # Copy to expected filename for backward compatibility
+    Copy-Item "target/java-auth-server-1.0.0-SNAPSHOT.jar" "target/auth-server-lambda.jar" -Force
+    
+    Write-Success "Lambda functions built successfully"
+    Write-Status "JAR contains both Basic Auth and OAuth2 handlers"
 }
 
 # Step 2: Create S3 bucket if it doesn't exist
@@ -144,10 +167,10 @@ try {
     exit 1
 }
 
-# Step 3: Upload Lambda deployment package
-Write-Status "Uploading Lambda deployment package..."
+# Step 3: Upload Lambda deployment package (contains both Auth handlers)
+Write-Status "Uploading Lambda deployment package (Basic Auth + OAuth2)..."
 try {
-    aws s3 cp "target/auth-server-lambda.jar" "s3://$ArtifactBucket/$ArtifactKey" --metadata "environment=$Environment,timestamp=$Timestamp"
+    aws s3 cp "target/auth-server-lambda.jar" "s3://$ArtifactBucket/$ArtifactKey" --metadata "environment=$Environment,timestamp=$Timestamp,functions=BasicAuth+OAuth2"
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to upload Lambda package"
     }
@@ -157,6 +180,7 @@ try {
 }
 
 Write-Success "Lambda package uploaded as: $ArtifactKey"
+Write-Status "Package contains handlers for Basic Auth and OAuth2 endpoints"
 
 # Step 4: Upload nested CloudFormation templates
 Write-Status "Uploading nested CloudFormation templates..."
@@ -296,7 +320,6 @@ try {
     
     if ($outputs) {
         $apiEndpoint = ($outputs | Where-Object { $_.OutputKey -eq "ApiEndpoint" }).OutputValue
-        $dashboardUrl = ($outputs | Where-Object { $_.OutputKey -eq "DashboardUrl" }).OutputValue
         
         Write-Success "Deployment completed successfully!"
         Write-Host ""
@@ -304,16 +327,54 @@ try {
         Write-Host "Environment: $Environment"
         Write-Host "Stack Name: $StackName"
         Write-Host "API Endpoint: $apiEndpoint"
-        Write-Host "CloudWatch Dashboard: $dashboardUrl"
         Write-Host "Lambda Package: s3://$ArtifactBucket/$ArtifactKey"
+        Write-Host "Deployed Functions: Basic Auth + OAuth2 (Client Credentials Grant)"
         Write-Host ""
         
-        # Test command
-        Write-Host "=== TEST COMMAND ===" -ForegroundColor Yellow
+        # Test commands
+        Write-Host "=== TEST COMMANDS ===" -ForegroundColor Yellow
+        
+        # Basic Auth test
+        Write-Host "1. Basic Authentication Test:" -ForegroundColor Cyan
         $basicAuth = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("alice:password123"))
-        Write-Host "curl -X POST $apiEndpoint/auth/validate \"
+        Write-Host "curl -X POST $apiEndpoint/auth \"
         Write-Host "  -H `"Authorization: Basic $basicAuth`" \"
         Write-Host "  -H `"Content-Type: application/json`""
+        Write-Host ""
+        
+        # OAuth2 tests
+        Write-Host "2. OAuth2 Token Request Test:" -ForegroundColor Cyan
+        Write-Host "curl -X POST $apiEndpoint/oauth/token \"
+        Write-Host "  -H `"Content-Type: application/x-www-form-urlencoded`" \"
+        Write-Host "  -d `"grant_type=client_credentials&client_id=test-client-1&client_secret=test-client-1-secret&scope=read`""
+        Write-Host ""
+        
+        Write-Host "3. OAuth2 Token Introspection Test:" -ForegroundColor Cyan
+        Write-Host "# First get a token from step 2, then:"
+        Write-Host "curl -X POST $apiEndpoint/oauth/introspect \"
+        Write-Host "  -H `"Content-Type: application/x-www-form-urlencoded`" \"
+        Write-Host "  -d `"token=YOUR_ACCESS_TOKEN_HERE`""
+        Write-Host ""
+        
+        Write-Host "4. OAuth2 Error Test (Invalid Grant Type):" -ForegroundColor Cyan
+        Write-Host "curl -X POST $apiEndpoint/oauth/token \"
+        Write-Host "  -H `"Content-Type: application/x-www-form-urlencoded`" \"
+        Write-Host "  -d `"grant_type=authorization_code&client_id=test-client-1&client_secret=test-client-1-secret`""
+        Write-Host ""
+        
+        # Show available OAuth2 test clients
+        Write-Host "=== AVAILABLE OAUTH2 TEST CLIENTS ===" -ForegroundColor Yellow
+        Write-Host "1. test-client-1 (Active)"
+        Write-Host "   Secret: test-client-1-secret"
+        Write-Host "   Scopes: read, write, admin"
+        Write-Host ""
+        Write-Host "2. test-client-2 (Active)"
+        Write-Host "   Secret: test-client-2-secret"
+        Write-Host "   Scopes: read"
+        Write-Host ""
+        Write-Host "3. test-client-3 (Disabled - for testing access_denied)"
+        Write-Host "   Secret: test-client-3-secret"
+        Write-Host "   Scopes: read, write"
         Write-Host ""
         
         # Save deployment info
@@ -322,11 +383,22 @@ try {
             timestamp = $Timestamp
             stackName = $StackName
             apiEndpoint = $apiEndpoint
-            dashboardUrl = $dashboardUrl
             artifactLocation = "s3://$ArtifactBucket/$ArtifactKey"
             region = $Region
             accountId = $AccountId
-        } | ConvertTo-Json -Depth 2
+            deployedFunctions = @("BasicAuth", "OAuth2")
+            oauth2Endpoints = @(
+                "$apiEndpoint/oauth/token"
+                "$apiEndpoint/oauth/introspect"
+            )
+            testClients = @(
+                @{ id = "test-client-1"; secret = "test-client-1-secret"; scopes = @("read", "write", "admin"); status = "active" }
+                @{ id = "test-client-2"; secret = "test-client-2-secret"; scopes = @("read"); status = "active" }
+                @{ id = "test-client-3"; secret = "test-client-3-secret"; scopes = @("read", "write"); status = "disabled" }
+            )
+            monitoringEnabled = $false
+            note = "Monitoring stack disabled for this deployment"
+        } | ConvertTo-Json -Depth 3
         
         $deploymentInfo | Set-Content "deployment-info-$Environment.json"
         Write-Success "Deployment info saved to: deployment-info-$Environment.json"
@@ -338,4 +410,5 @@ try {
     Write-Warning "Failed to retrieve stack outputs: $_"
 }
 
-Write-Success "Script completed successfully!" 
+Write-Success "OAuth2-enabled authentication server deployment completed successfully!"
+Write-Status "Both Basic Authentication and OAuth2 Client Credentials Grant are now available" 

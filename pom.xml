@@ -123,6 +123,30 @@
             <version>${aws-sdk.version}</version>
         </dependency>
 
+        <!-- Additional AWS SDK v2 for OAuth 2.0 Step 2 -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>ssm</artifactId>
+            <version>${aws-sdk.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>kms</artifactId>
+            <version>${aws-sdk.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>auth</artifactId>
+            <version>${aws-sdk.version}</version>
+        </dependency>
+        
+        <!-- AWS SDK URL Connection Client for better Lambda performance -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>url-connection-client</artifactId>
+            <version>${aws-sdk.version}</version>
+        </dependency>
+
         <!-- Lambda Powertools for observability -->
         <dependency>
             <groupId>software.amazon.lambda</groupId>

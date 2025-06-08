@@ -12,7 +12,11 @@ Parameters:
   
   LambdaFunctionArn:
     Type: String
-    Description: ARN of the Lambda function
+    Description: ARN of the Basic Auth Lambda function
+  
+  OAuth2FunctionArn:
+    Type: String
+    Description: ARN of the OAuth2 Lambda function
   
   ThrottleRateLimit:
     Type: Number
@@ -44,8 +48,8 @@ Resources:
           - Content-Type
         MaxAge: 300
 
-  # Lambda integration
-  LambdaIntegration:
+  # Basic Auth Lambda integration
+  AuthLambdaIntegration:
     Type: AWS::ApiGatewayV2::Integration
     Properties:
       ApiId: !Ref HttpApi
@@ -54,13 +58,50 @@ Resources:
       PayloadFormatVersion: '2.0'
       TimeoutInMillis: 29000
 
-  # Authentication validation route
+  # OAuth2 Lambda integration
+  OAuth2LambdaIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Ref OAuth2FunctionArn
+      PayloadFormatVersion: '2.0'
+      TimeoutInMillis: 29000
+
+  # Basic authentication route
+  AuthRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: 'POST /auth'
+      Target: !Sub 'integrations/${AuthLambdaIntegration}'
+      AuthorizationType: NONE
+
+  # Legacy authentication validation route (for backward compatibility)
   AuthValidateRoute:
     Type: AWS::ApiGatewayV2::Route
     Properties:
       ApiId: !Ref HttpApi
       RouteKey: 'POST /auth/validate'
-      Target: !Sub 'integrations/${LambdaIntegration}'
+      Target: !Sub 'integrations/${AuthLambdaIntegration}'
+      AuthorizationType: NONE
+
+  # OAuth2 token endpoint
+  OAuth2TokenRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: 'POST /oauth/token'
+      Target: !Sub 'integrations/${OAuth2LambdaIntegration}'
+      AuthorizationType: NONE
+
+  # OAuth2 token introspection endpoint
+  OAuth2IntrospectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: 'POST /oauth/introspect'
+      Target: !Sub 'integrations/${OAuth2LambdaIntegration}'
       AuthorizationType: NONE
 
   # Health check route
@@ -69,7 +110,7 @@ Resources:
     Properties:
       ApiId: !Ref HttpApi
       RouteKey: 'GET /health'
-      Target: !Sub 'integrations/${LambdaIntegration}'
+      Target: !Sub 'integrations/${AuthLambdaIntegration}'
       AuthorizationType: NONE
 
   # API Gateway Stage
@@ -80,11 +121,20 @@ Resources:
       StageName: !Ref Environment
       AutoDeploy: true
 
-  # Lambda permission for API Gateway
-  LambdaPermission:
+  # Lambda permission for Basic Auth function
+  AuthLambdaPermission:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Select [6, !Split [":", !Ref LambdaFunctionArn]]
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/*'
+
+  # Lambda permission for OAuth2 function
+  OAuth2LambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Select [6, !Split [":", !Ref OAuth2FunctionArn]]
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/*'

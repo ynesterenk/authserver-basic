@@ -37,7 +37,7 @@ Parameters:
     Description: Cache TTL for user credentials in minutes
 
 Resources:
-  # Simple Lambda Function
+  # Basic Authentication Lambda Function
   AuthFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -56,26 +56,68 @@ Resources:
           CACHE_TTL_MINUTES: !Ref CacheTtlMinutes
           ENVIRONMENT: !Ref Environment
           LOG_LEVEL: DEBUG
-          SPRING_PROFILES_ACTIVE: aws
+          SPRING_PROFILES_ACTIVE: local
       TracingConfig:
         Mode: Active
 
-  # CloudWatch Log Group
-  LogGroup:
+  # OAuth2 Lambda Function
+  OAuth2Function:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-oauth2-function-${Environment}'
+      Runtime: java21
+      Handler: com.example.auth.infrastructure.oauth.OAuth2LambdaHandler::handleRequest
+      Code:
+        S3Bucket: !Ref ArtifactBucket
+        S3Key: !Ref ArtifactKey
+      MemorySize: !Ref MemorySize
+      Timeout: 30
+      Role: !Ref ExecutionRoleArn
+      Environment:
+        Variables:
+          CREDENTIAL_SECRET_ARN: !Ref SecretArn
+          CACHE_TTL_MINUTES: !Ref CacheTtlMinutes
+          ENVIRONMENT: !Ref Environment
+          LOG_LEVEL: DEBUG
+          SPRING_PROFILES_ACTIVE: local
+      TracingConfig:
+        Mode: Active
+
+  # CloudWatch Log Group for Basic Auth Function
+  AuthLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/lambda/${ProjectName}-auth-function-${Environment}'
       RetentionInDays: 7
 
+  # CloudWatch Log Group for OAuth2 Function
+  OAuth2LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ProjectName}-oauth2-function-${Environment}'
+      RetentionInDays: 7
+
 Outputs:
   LambdaFunctionArn:
-    Description: ARN of the Lambda function
+    Description: ARN of the Basic Auth Lambda function
     Value: !GetAtt AuthFunction.Arn
     Export:
       Name: !Sub '${ProjectName}-${Environment}-LambdaFunctionArn'
   
   LambdaFunctionName:
-    Description: Name of the Lambda function
+    Description: Name of the Basic Auth Lambda function
     Value: !Ref AuthFunction
     Export:
-      Name: !Sub '${ProjectName}-${Environment}-LambdaFunctionName' 
+      Name: !Sub '${ProjectName}-${Environment}-LambdaFunctionName'
+
+  OAuth2FunctionArn:
+    Description: ARN of the OAuth2 Lambda function
+    Value: !GetAtt OAuth2Function.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-OAuth2FunctionArn'
+  
+  OAuth2FunctionName:
+    Description: Name of the OAuth2 Lambda function
+    Value: !Ref OAuth2Function
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-OAuth2FunctionName' 

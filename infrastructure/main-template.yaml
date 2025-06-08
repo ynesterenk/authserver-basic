@@ -105,6 +105,7 @@ Resources:
         Environment: !Ref Environment
         ProjectName: !Ref AWS::StackName
         LambdaFunctionArn: !GetAtt LambdaStack.Outputs.LambdaFunctionArn
+        OAuth2FunctionArn: !GetAtt LambdaStack.Outputs.OAuth2FunctionArn
         ThrottleRateLimit: !Ref ApiThrottleRateLimit
         ThrottleBurstLimit: !Ref ApiThrottleBurstLimit
       Tags:

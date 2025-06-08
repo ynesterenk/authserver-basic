@@ -2,9 +2,9 @@ name: Deploy Java Authorization Server
 
 on:
   push:
-    branches: [main, develop]
+    branches: [authserver.migration, develop]
   pull_request:
-    branches: [main]
+    branches: [authserver.migration]
   workflow_dispatch:
     inputs:
       environment:
@@ -14,8 +14,6 @@ on:
         type: choice
         options:
         - dev
-        - staging
-        - prod
       region:
         description: 'AWS Region'
         required: true
@@ -115,7 +113,7 @@ jobs:
     name: Deploy to Development
     needs: test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'dev')
+    if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/authserver.migration' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'dev')
     environment: 
       name: development
       url: ${{ steps.deploy.outputs.api_endpoint }}
@@ -159,136 +157,10 @@ jobs:
           name: deployment-info-dev
           path: deployment-info-dev.json
 
-  # Deploy to staging environment  
-  # deploy-staging:
-  #   name: Deploy to Staging
-  #   needs: test
-  #   runs-on: ubuntu-latest
-  #   if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
-  #   environment: 
-  #     name: staging
-  #     url: ${{ steps.deploy.outputs.api_endpoint }}
-  #   
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@v4
-  #     - name: Download Lambda artifact
-  #       uses: actions/download-artifact@v4
-  #       with:
-  #         name: lambda-package
-  #         path: target/
-  #     
-  #     - name: Configure AWS credentials
-  #       uses: aws-actions/configure-aws-credentials@v4
-  #       with:
-  #         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-  #         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  #         aws-region: ${{ env.AWS_REGION }}
-  #     
-  #     - name: Deploy to AWS
-  #       id: deploy
-  #       run: |
-  #         chmod +x scripts/deploy.sh
-  #         # Get AWS Account ID dynamically
-  #         ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-  #         ./scripts/deploy.sh staging ${{ env.AWS_REGION }} ${{ env.ARTIFACT_BUCKET_PREFIX }} $ACCOUNT_ID
-  #         
-  #         # Extract API endpoint from deployment info
-  #         API_ENDPOINT=$(jq -r '.apiEndpoint' deployment-info-staging.json)
-  #         echo "api_endpoint=$API_ENDPOINT" >> $GITHUB_OUTPUT
-  #     
-  #     - name: Run smoke tests
-  #       run: |
-  #         chmod +x scripts/smoke-test.sh
-  #         ./scripts/smoke-test.sh staging ${{ env.AWS_REGION }}
-  #     
-  #     - name: Upload deployment info
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: deployment-info-staging
-  #         path: deployment-info-staging.json
-
-  # Deploy to production environment (requires manual approval)
-  # deploy-prod:
-  #   name: Deploy to Production
-  #   needs: [test, deploy-staging]
-  #   runs-on: ubuntu-latest
-  #   if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'prod')
-  #   environment: 
-  #     name: production
-  #     url: ${{ steps.deploy.outputs.api_endpoint }}
-  #   
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@v4
-  #     - name: Download Lambda artifact
-  #       uses: actions/download-artifact@v4
-  #       with:
-  #         name: lambda-package
-  #         path: target/
-  #     
-  #     - name: Configure AWS credentials
-  #       uses: aws-actions/configure-aws-credentials@v4
-  #       with:
-  #         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_PROD }}
-  #         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_PROD }}
-  #         aws-region: ${{ env.AWS_REGION }}
-  #     
-  #     - name: Deploy to AWS
-  #       id: deploy
-  #       run: |
-  #         chmod +x scripts/deploy.sh
-  #         # Get AWS Account ID dynamically
-  #         ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-  #         ./scripts/deploy.sh prod ${{ env.AWS_REGION }} ${{ env.ARTIFACT_BUCKET_PREFIX }} $ACCOUNT_ID
-  #         
-  #         # Extract API endpoint from deployment info
-  #         API_ENDPOINT=$(jq -r '.apiEndpoint' deployment-info-prod.json)
-  #         echo "api_endpoint=$API_ENDPOINT" >> $GITHUB_OUTPUT
-  #     
-  #     - name: Run smoke tests
-  #       run: |
-  #         chmod +x scripts/smoke-test.sh
-  #         ./scripts/smoke-test.sh prod ${{ env.AWS_REGION }}
-  #     
-  #     - name: Upload deployment info
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: deployment-info-prod
-  #         path: deployment-info-prod.json
-  #     
-  #     - name: Create GitHub release
-  #       if: github.ref == 'refs/heads/main'
-  #       uses: softprops/action-gh-release@v1
-  #       with:
-  #         tag_name: v${{ github.run_number }}
-  #         name: Release v${{ github.run_number }}
-  #         body: |
-  #           ## Java Authorization Server - Production Release
-  #           
-  #           **Environment:** Production
-  #           **API Endpoint:** ${{ steps.deploy.outputs.api_endpoint }}
-  #           **Build:** ${{ github.sha }}
-  #           **Timestamp:** ${{ github.event.head_commit.timestamp }}
-  #           
-  #           ### Changes
-  #           ${{ github.event.head_commit.message }}
-  #           
-  #           ### Test Results
-  #           - All unit tests passed ✅
-  #           - Security scan completed ✅
-  #           - Smoke tests passed ✅
-  #           
-  #           ### Deployment Info
-  #           - Stack Name: java-auth-server-prod
-  #           - Region: ${{ env.AWS_REGION }}
-  #         draft: false
-  #         prerelease: false
-
   # Notification job
   notify:
     name: Notify Deployment Status
-    needs: [deploy-dev]  # Only depend on deploy-dev now
+    needs: [deploy-dev]
     runs-on: ubuntu-latest
     if: always()
     
@@ -316,7 +188,7 @@ jobs:
   # Cleanup job for failed deployments
   cleanup:
     name: Cleanup Failed Deployment
-    needs: [deploy-dev]  # Only depend on deploy-dev now
+    needs: [deploy-dev]
     runs-on: ubuntu-latest
     if: failure()
     

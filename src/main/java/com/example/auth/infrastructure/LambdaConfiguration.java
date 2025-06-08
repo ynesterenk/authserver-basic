@@ -1,7 +1,10 @@
 package com.example.auth.infrastructure;
 
 import com.example.auth.domain.port.UserRepository;
+import com.example.auth.domain.port.oauth.OAuthClientRepository;
 import com.example.auth.domain.util.PasswordHasher;
+import com.example.auth.domain.util.oauth.ClientSecretHasher;
+import com.example.auth.infrastructure.oauth.InMemoryOAuthClientRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -92,6 +95,26 @@ public class LambdaConfiguration {
     public UserRepository localUserRepository(PasswordHasher passwordHasher) {
         logger.info("Creating LocalUserRepository bean for local development");
         return new LocalUserRepository(passwordHasher);
+    }
+
+    /**
+     * Creates the ClientSecretHasher utility for OAuth2 client secret hashing.
+     */
+    @Bean
+    public ClientSecretHasher clientSecretHasher() {
+        logger.info("Creating ClientSecretHasher bean");
+        return new ClientSecretHasher();
+    }
+
+    /**
+     * Creates the OAuthClientRepository implementation for local development and testing.
+     */
+    @Bean
+    @Primary
+    @Profile({"local", "test"})
+    public OAuthClientRepository inMemoryOAuthClientRepository(ClientSecretHasher clientSecretHasher) {
+        logger.info("Creating InMemoryOAuthClientRepository bean for local/test environment");
+        return new InMemoryOAuthClientRepository(clientSecretHasher);
     }
 
     /**

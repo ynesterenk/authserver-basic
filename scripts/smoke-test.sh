@@ -36,39 +36,101 @@ print_status "Environment: $ENVIRONMENT"
 print_status "Region: $REGION"
 echo ""
 
-# Test 1: Health Check
-#print_status "Test 1: Health endpoint..."
-#if curl -f -s "${API_ENDPOINT}/health" > /dev/null; then
-#    print_success "✓ Health check passed"
-#else
-#    print_error "✗ Health check failed"
-#    exit 1
-#fi
+# =================
+# BASIC AUTH TESTS
+# =================
 
-# Test 2: Valid authentication - FIXED CREDENTIALS
-print_status "Test 1: Valid authentication (testuser)..."
+# Test 1: Valid basic authentication
+print_status "Test 1: Valid basic authentication (testuser)..."
 RESPONSE=$(curl -s -X POST "${API_ENDPOINT}/auth/validate" \
     -H "Authorization: Basic $(echo -n 'testuser:testpass123' | base64)" \
     -H "Content-Type: application/json")
 
 if echo "$RESPONSE" | grep -q '"allowed":true'; then
-    print_success "✓ Valid authentication test passed"
+    print_success "✓ Valid basic authentication test passed"
 else
-    print_error "✗ Valid authentication test failed. Response: $RESPONSE"
+    print_error "✗ Valid basic authentication test failed. Response: $RESPONSE"
     exit 1
 fi
 
-# Test 3: Invalid authentication
-print_status "Test 3: Invalid authentication..."
+# Test 2: Invalid basic authentication
+print_status "Test 2: Invalid basic authentication..."
 RESPONSE=$(curl -s -X POST "${API_ENDPOINT}/auth/validate" \
     -H "Authorization: Basic $(echo -n 'invalid:invalid' | base64)" \
     -H "Content-Type: application/json")
 
 if echo "$RESPONSE" | grep -q '"allowed":false'; then
-    print_success "✓ Invalid authentication test passed"
+    print_success "✓ Invalid basic authentication test passed"
 else
-    print_error "✗ Invalid authentication test failed. Response: $RESPONSE"
+    print_error "✗ Invalid basic authentication test failed. Response: $RESPONSE"
     exit 1
 fi
 
-print_success "All smoke tests passed! ✅" 
+# =================
+# OAUTH2 TESTS
+# =================
+
+# Test 3: OAuth2 Token Generation
+print_status "Test 3: OAuth2 token generation..."
+TOKEN_RESPONSE=$(curl -s -X POST "${API_ENDPOINT}/oauth/token" \
+    -H "Content-Type: application/x-www-form-urlencoded" \
+    -d "grant_type=client_credentials&client_id=test-client-1&client_secret=test-client-1-secret&scope=read")
+
+if echo "$TOKEN_RESPONSE" | grep -q '"access_token"'; then
+    ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.access_token')
+    print_success "✓ OAuth2 token generation test passed"
+else
+    print_error "✗ OAuth2 token generation test failed. Response: $TOKEN_RESPONSE"
+    exit 1
+fi
+
+# Test 4: OAuth2 Token Introspection (valid token)
+print_status "Test 4: OAuth2 token introspection (valid token)..."
+INTROSPECT_RESPONSE=$(curl -s -X POST "${API_ENDPOINT}/oauth/introspect" \
+    -H "Content-Type: application/x-www-form-urlencoded" \
+    -d "token=${ACCESS_TOKEN}")
+
+if echo "$INTROSPECT_RESPONSE" | grep -q '"active":true'; then
+    print_success "✓ OAuth2 token introspection (valid) test passed"
+else
+    print_error "✗ OAuth2 token introspection (valid) test failed. Response: $INTROSPECT_RESPONSE"
+    exit 1
+fi
+
+# Test 5: OAuth2 Token Introspection (invalid token)
+print_status "Test 5: OAuth2 token introspection (invalid token)..."
+INTROSPECT_INVALID_RESPONSE=$(curl -s -X POST "${API_ENDPOINT}/oauth/introspect" \
+    -H "Content-Type: application/x-www-form-urlencoded" \
+    -d "token=invalid.jwt.token")
+
+if echo "$INTROSPECT_INVALID_RESPONSE" | grep -q '"active":false'; then
+    print_success "✓ OAuth2 token introspection (invalid) test passed"
+else
+    print_error "✗ OAuth2 token introspection (invalid) test failed. Response: $INTROSPECT_INVALID_RESPONSE"
+    exit 1
+fi
+
+# Test 6: OAuth2 Invalid Client Credentials
+print_status "Test 6: OAuth2 invalid client credentials..."
+INVALID_CLIENT_RESPONSE=$(curl -s -X POST "${API_ENDPOINT}/oauth/token" \
+    -H "Content-Type: application/x-www-form-urlencoded" \
+    -d "grant_type=client_credentials&client_id=test-client-1&client_secret=wrong-secret")
+
+if echo "$INVALID_CLIENT_RESPONSE" | grep -q '"error":"invalid_client"'; then
+    print_success "✓ OAuth2 invalid client credentials test passed"
+else
+    print_error "✗ OAuth2 invalid client credentials test failed. Response: $INVALID_CLIENT_RESPONSE"
+    exit 1
+fi
+
+echo ""
+print_success "All smoke tests passed! ✅"
+echo ""
+print_status "=== SMOKE TEST SUMMARY ==="
+echo "✓ Basic Authentication: Valid credentials"
+echo "✓ Basic Authentication: Invalid credentials"  
+echo "✓ OAuth2: Token generation"
+echo "✓ OAuth2: Token introspection (valid)"
+echo "✓ OAuth2: Token introspection (invalid)"
+echo "✓ OAuth2: Invalid client credentials"
+print_success "Both Basic Auth and OAuth2 endpoints working correctly!" 

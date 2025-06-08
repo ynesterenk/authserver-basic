@@ -65,12 +65,26 @@ public class OAuth2RequestParser {
             String scope = formParameters.get(PARAM_SCOPE);
 
             // Create and validate token request
-            TokenRequest tokenRequest = new TokenRequest(
-                grantType.trim(),
-                credentials.clientId,
-                credentials.clientSecret,
-                scope != null ? scope.trim() : null
-            );
+            TokenRequest tokenRequest;
+            try {
+                tokenRequest = new TokenRequest(
+                    grantType.trim(),
+                    credentials.clientId,
+                    credentials.clientSecret,
+                    scope != null ? scope.trim() : null
+                );
+            } catch (IllegalArgumentException e) {
+                // Check if this is an unsupported grant type error
+                if (e.getMessage() != null && e.getMessage().contains("Only client_credentials grant type is supported")) {
+                    throw new OAuth2AuthenticationException(
+                        OAuthError.unsupportedGrantType(grantType.trim())
+                    );
+                }
+                // Re-throw for other validation errors
+                throw new OAuth2AuthenticationException(
+                    OAuthError.invalidRequest(e.getMessage())
+                );
+            }
 
             logger.debug("Successfully parsed OAuth 2.0 token request for client: {}", credentials.clientId);
             return tokenRequest;

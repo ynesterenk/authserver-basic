@@ -1,10 +1,48 @@
 {
-    "artifactLocation":  "s3://auth-server-artifacts-545009823602-us-east-1/auth-server-dev-20250531-103820.zip",
-    "timestamp":  "20250531-103820",
-    "accountId":  "545009823602",
+    "artifactLocation":  "s3://auth-server-artifacts-545009823602-us-east-1/auth-server-dev-20250608-004740.zip",
+    "testClients":  [
+                        {
+                            "status":  "active",
+                            "scopes":  [
+                                           "read",
+                                           "write",
+                                           "admin"
+                                       ],
+                            "id":  "test-client-1",
+                            "secret":  "test-client-1-secret"
+                        },
+                        {
+                            "status":  "active",
+                            "scopes":  [
+                                           "read"
+                                       ],
+                            "id":  "test-client-2",
+                            "secret":  "test-client-2-secret"
+                        },
+                        {
+                            "status":  "disabled",
+                            "scopes":  [
+                                           "read",
+                                           "write"
+                                       ],
+                            "id":  "test-client-3",
+                            "secret":  "test-client-3-secret"
+                        }
+                    ],
     "environment":  "dev",
-    "apiEndpoint":  "https://2no7vkxfgi.execute-api.us-east-1.amazonaws.com/dev",
-    "dashboardUrl":  null,
+    "oauth2Endpoints":  [
+                            "https://f3c6myznrg.execute-api.us-east-1.amazonaws.com/dev/oauth/token",
+                            "https://f3c6myznrg.execute-api.us-east-1.amazonaws.com/dev/oauth/introspect"
+                        ],
     "region":  "us-east-1",
-    "stackName":  "java-auth-server-dev"
+    "monitoringEnabled":  false,
+    "accountId":  "545009823602",
+    "timestamp":  "20250608-004740",
+    "stackName":  "java-auth-server-dev",
+    "apiEndpoint":  "https://f3c6myznrg.execute-api.us-east-1.amazonaws.com/dev",
+    "deployedFunctions":  [
+                              "BasicAuth",
+                              "OAuth2"
+                          ],
+    "note":  "Monitoring stack disabled for this deployment"
 }

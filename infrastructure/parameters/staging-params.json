@@ -18,9 +18,5 @@
   {
     "ParameterKey": "CacheTtlMinutes",
     "ParameterValue": "5"
-  },
-  {
-    "ParameterKey": "NotificationEmail",
-    "ParameterValue": "yevgen2005@gmail.com"
   }
 ] 
