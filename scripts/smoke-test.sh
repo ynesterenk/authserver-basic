@@ -43,7 +43,7 @@ echo ""
 # Test 1: Valid basic authentication
 print_status "Test 1: Valid basic authentication (testuser)..."
 RESPONSE=$(curl -s -X POST "${API_ENDPOINT}/auth/validate" \
-    -H "Authorization: Basic $(echo -n 'testuser:testpass123' | base64)" \
+    -H "Authorization: Basic $(echo -n 'testuser:testpass' | base64)" \
     -H "Content-Type: application/json")
 
 if echo "$RESPONSE" | grep -q '"allowed":true'; then
