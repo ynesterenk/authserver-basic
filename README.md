@@ -6,12 +6,23 @@ This is the core domain implementation of a lightweight, cloud-native authorizat
 
 ## Features
 
+### Core Authentication
 - **Secure Password Hashing**: Uses Argon2id algorithm for maximum security
 - **Basic Authentication**: Supports HTTP Basic Authentication (username:password)
 - **User Management**: Supports user status (ACTIVE/DISABLED) and role-based access
 - **Timing Attack Protection**: Consistent response times to prevent timing attacks
+
+### OAuth 2.0 Support
+- **Client Credentials Grant**: RFC 6749 compliant OAuth 2.0 Client Credentials flow
+- **JWT Access Tokens**: Industry-standard JWT tokens with configurable expiration
+- **Token Introspection**: RFC 7662 compliant token introspection endpoint
+- **Scope-based Authorization**: Fine-grained access control with OAuth scopes
+- **Client Management**: OAuth client registration with secret hashing
+
+### Architecture & Quality
 - **Clean Architecture**: Hexagonal architecture with clear separation of concerns
-- **Comprehensive Testing**: 90%+ code coverage with unit tests
+- **Comprehensive Testing**: 90%+ code coverage with unit and integration tests
+- **AWS Native**: Optimized for AWS Lambda with API Gateway integration
 
 ## Architecture
 
@@ -21,10 +32,15 @@ The implementation follows hexagonal (ports and adapters) architecture:
 src/main/java/com/example/auth/
 ├── domain/
 │   ├── model/          # Domain entities (User, AuthenticationRequest, AuthenticationResult)
+│   │   └── oauth/      # OAuth entities (OAuthClient, TokenRequest, TokenResponse)
 │   ├── service/        # Business logic (AuthenticatorService, BasicAuthenticatorService)
+│   │   └── oauth/      # OAuth services (ClientCredentialsService, OAuth2TokenService)
 │   ├── port/           # Interfaces for external dependencies (UserRepository)
+│   │   └── oauth/      # OAuth ports (OAuthClientRepository)
 │   └── util/           # Domain utilities (PasswordHasher, BasicAuthDecoder)
+│       └── oauth/      # OAuth utilities (OAuth2RequestParser, ScopeValidator)
 ├── infrastructure/     # Infrastructure implementations (InMemoryUserRepository)
+│   └── oauth/          # OAuth infrastructure (OAuth2LambdaHandler, client repositories)
 └── config/             # Spring configuration (AuthConfig)
 ```
 
@@ -213,8 +229,9 @@ A lightweight, cloud-native authorization service implementing HTTP Basic Authen
 ## Project Status
 - ✅ **Step 1 COMPLETED**: Core Domain Implementation (31/31 tests passing)
 - ✅ **Step 2 COMPLETED**: AWS Lambda Integration (31/31 tests passing)
-- 🚧 **Step 3 PENDING**: CloudFormation Deployment
-- 🚧 **Step 4 PENDING**: Production Operations
+- ✅ **Step 3 COMPLETED**: OAuth 2.0 Client Credentials Grant Implementation
+- ✅ **Step 4 COMPLETED**: CloudFormation Deployment
+- 🚧 **Step 5 PENDING**: Production Operations
 
 ## Architecture
 
@@ -380,6 +397,78 @@ Content-Type: application/json
 - `405`: Invalid HTTP method (only POST supported)
 - `500`: Internal server error
 
+### POST /oauth/token
+
+OAuth 2.0 token endpoint implementing Client Credentials Grant flow.
+
+**Request Headers:**
+```
+Content-Type: application/x-www-form-urlencoded
+Authorization: Basic base64(client_id:client_secret) [optional]
+```
+
+**Request Body (form-encoded):**
+```
+grant_type=client_credentials
+client_id=your_client_id [if not in Authorization header]
+client_secret=your_client_secret [if not in Authorization header]
+scope=read write [optional]
+```
+
+**Response (200 OK):**
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "scope": "read write"
+}
+```
+
+**Error Responses:**
+- `400`: Invalid request parameters
+- `401`: Invalid client credentials
+- `403`: Client not active or scope not allowed
+- `405`: Invalid HTTP method
+- `500`: Internal server error
+
+### POST /oauth/introspect  
+
+OAuth 2.0 token introspection endpoint (RFC 7662).
+
+**Request Headers:**
+```
+Content-Type: application/x-www-form-urlencoded
+```
+
+**Request Body (form-encoded):**
+```
+token=access_token_to_introspect
+```
+
+**Response (200 OK) - Active Token:**
+```json
+{
+  "active": true,
+  "client_id": "your_client_id",
+  "scope": "read write",
+  "exp": 1672534800,
+  "iat": 1672531200
+}
+```
+
+**Response (200 OK) - Inactive Token:**
+```json
+{
+  "active": false
+}
+```
+
+**Error Responses:**
+- `400`: Missing token parameter
+- `405`: Invalid HTTP method  
+- `500`: Internal server error
+
 ## Security Features
 
 ### Password Security
@@ -430,23 +519,24 @@ Content-Type: application/json
 
 ## Future Enhancements (Roadmap)
 
-### Step 3: CloudFormation Deployment
-- Complete infrastructure as code
-- API Gateway configuration
-- IAM least-privilege policies
-- CloudWatch alarms and dashboards
-
-### Step 4: Production Operations  
+### Step 5: Production Operations  
 - Automated secrets rotation
 - Multi-region deployment
 - Blue/green deployment pipeline
 - Security hardening and compliance
 
-### OAuth 2.0 Extension
-- Client credentials flow
-- PKCE support
-- JWT token issuance
-- Role-based access control (RBAC)
+### OAuth 2.0 Extensions
+- Authorization Code Grant with PKCE
+- Device Authorization Grant
+- JWT token customization
+- Advanced role-based access control (RBAC)
+- Token refresh capabilities
+
+### Advanced Features
+- Rate limiting and throttling
+- API versioning
+- OpenAPI/Swagger documentation
+- Enhanced monitoring and alerting
 
 ## Contributing
 
