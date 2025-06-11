@@ -481,3 +481,5 @@ This project is part of the AWS to Azure Migration initiative.
 ### Development Documentation
 - [Local Development](docs/local-development.md) - Running the application locally
 - [Monitoring](docs/monitoring.md) - CloudWatch logs and metrics 
+
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/ynesterenk/authserver-basic)
