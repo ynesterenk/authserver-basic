@@ -1,14 +1,14 @@
-Product Requirements Document (PRD)
-Java Authorization Server (Basic Access Authentication, AWS Lambda)
+### Product Requirements Document (PRD)
+## Java Authorization Server (Basic Access Authentication, AWS Lambda)
 
-1. Purpose & Scope
+## 1. Purpose & Scope
 Provide a lightweight, cloud-native authorization service that authenticates HTTP requests with Basic access authentication.
 
 Primary Goal: Securely validate a client’s username:password over HTTPS and return an allow / deny outcome fast enough for low-latency, serverless workloads.
 
 Secondary Goal: Lay clean architectural paths to upgrade the service to OAuth 2.0 (client-credentials, PKCE, etc.) without major refactor.
 
-2. Success Criteria
+## 2. Success Criteria
 KPI	Target
 Cold-start latency (P95)	≤ 600 ms
 Warm invocation latency (P95)	≤ 120 ms
@@ -16,14 +16,14 @@ Availability	≥ 99.9 % (Lambda + API Gateway)
 Unit-test coverage (auth core)	≥ 90 % line + branch
 Mean time to add new grant type	≤ 2 sprints
 
-3. Personas & Use-Cases
+## 3. Personas & Use-Cases
 Persona	Scenario
 Internal micro-service	Calls another internal API and must pass Basic credentials for authentication.
 DevOps engineer	Deploys an isolated stack to test new auth rules in a sandbox account.
 Security architect	Audits password hashing, IAM least-privilege, rotation policies.
 Platform team	Migrates from Basic to OAuth 2.0—expects drop-in extension, not rewrite.
 
-4. Functional Requirements
+## 4. Functional Requirements
 Credential Validation
 
 Accepts Authorization: Basic <base64(username:password)> header.
@@ -56,7 +56,7 @@ Pure-Java core auth library (no AWS SDK) with JUnit 5 + Testcontainers for Secre
 
 Maven wrapper script ./mvnw test.
 
-5. Non-Functional Requirements
+## 5. Non-Functional Requirements
 Category	Requirement
 Performance	≤ 120 ms warm; ≤ 600 ms cold.
 Scalability	Handle 500 RPS burst (Lambda concurrency & reserved capacity).
@@ -65,7 +65,7 @@ Reliability	Automatic retries (API Gateway → Lambda), DLQ for failed invocatio
 Maintainability	Clean-hexagonal architecture, dependency-injection (Micronaut or Spring Cloud Function).
 Compliance	Align with CIS AWS Foundations benchmarks; credential rotation policies.
 
-6. Architecture Overview
+## 6. Architecture Overview
 Copy
 Edit
 Client ──HTTPS──► AWS API Gateway (HTTP API)
@@ -92,7 +92,7 @@ Implement BasicAuthStrategy now; add OAuthClientCredentialsStrategy later.
 
 Swap strategies via request header inspection or stage variable.
 
-7. Data Model
+## 7. Data Model
 Field	Type	Notes
 username	string	Case-sensitive; UTF-8.
 passwordHash	string	Argon2id, base64.
@@ -151,7 +151,7 @@ Resources:
 Outputs:
   ApiUrl:
     Value: !Join ['', ['https://', !Ref Api, '.execute-api.', !Ref AWS::Region, '.amazonaws.com']]
-9. Testing Strategy
+## 9. Testing Strategy
 Level	Tooling	Focus
 Unit	JUnit 5, Mockito	Auth logic, hash comparison, error paths.
 Integration (local)	Testcontainers + LocalStack	Secrets Manager interaction.
@@ -170,7 +170,7 @@ Package & deploy dev stack with CloudFormation change-sets.
 
 Smoke test through API endpoint.
 
-10. Observability & Ops
+## 10. Observability & Ops
 Logging – JSON, one line per request, no PII.
 
 Metrics – custom CloudWatch metrics emitted via Lambda Powertools.
@@ -181,14 +181,14 @@ Tracing – AWS X-Ray enabled for Lambda.
 
 Secrets Rotation – 90-day automatic rotation Lambda (future work).
 
-11. Risks & Mitigations
+## 11. Risks & Mitigations
 Risk	Impact	Mitigation
 Credential leakage in logs	High	Never log decoded credentials; redact header.
 Lambda cold-starts	Medium	Provisioned concurrency for prod.
 Mis-configurable IAM policies	Medium	Use least privilege in CloudFormation, add IAM Access Analyzer checks.
 Scale-up blasts SecretsManager limits	Low	Cache secrets in memory (TTL 5 min).
 
-12. Timeline (High-Level)
+## 12. Timeline (High-Level)
 Milestone	Duration
 Requirements ✓	0.5 wk
 Prototype (local only)	1 wk
@@ -197,7 +197,7 @@ Unit + Integration Tests	0.5 wk
 Security Review & Hardening	0.5 wk
 MVP GA	~3-3.5 weeks
 
-13. Future Extensions
+## 13. Future Extensions
 OAuth 2.0: Client-Credentials & PKCE – plug new AuthStrategy; store client secrets in Secrets Manager; issue JWT via AWS KMS-backed signing.
 
 RBAC/ABAC – map roles to IAM policy documents or custom claims.
@@ -208,7 +208,7 @@ Cognito or AWS IAM Identity Center Integration – optional replace for Secrets 
 
 Edge Authentication – Move validation into CloudFront Functions for even lower latency.
 
-14. Open Questions
+## 14. Open Questions
 #	Question
 1	Should password hashes follow organizational Argon2id parameters or NIST defaults?
 2	Do we need IP-based throttling rules inside API Gateway?
