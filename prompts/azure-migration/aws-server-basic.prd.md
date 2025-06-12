@@ -1,4 +1,4 @@
-### Product Requirements Document (PRD)
+# Product Requirements Document (PRD)
 ## Java Authorization Server (Basic Access Authentication, AWS Lambda)
 
 ## 1. Purpose & Scope
@@ -147,7 +147,7 @@ Resources:
       ApiId: !Ref Api
       RouteKey: 'POST /auth/validate'
       Target: !Join ['/', ['integrations', !Ref AuthIntegration]]
-  # + Lambda permission, secret, IAM role, etc.
+  ### + Lambda permission, secret, IAM role, etc.
 Outputs:
   ApiUrl:
     Value: !Join ['', ['https://', !Ref Api, '.execute-api.', !Ref AWS::Region, '.amazonaws.com']]
@@ -209,7 +209,7 @@ Cognito or AWS IAM Identity Center Integration – optional replace for Secrets 
 Edge Authentication – Move validation into CloudFront Functions for even lower latency.
 
 ## 14. Open Questions
-#	Question
+###	Question
 1	Should password hashes follow organizational Argon2id parameters or NIST defaults?
 2	Do we need IP-based throttling rules inside API Gateway?
 3	Any compliance mandates (e.g., PCI, HIPAA) that influence logging / encryption requirements?
