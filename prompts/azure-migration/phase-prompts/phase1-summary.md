@@ -22,17 +22,34 @@ Following the PRD standard structure:
 ### Terraform Structure
 ```
 /authserver.azure/terraform/
-├── main.tf
-├── variables.tf
-├── outputs.tf
-├── backend.tf
+├── main.tf                           # Root module orchestration
+├── variables.tf                      # Input variables with validation
+├── outputs.tf                        # Deployment outputs
+├── backend.tf                        # Remote state configuration
+├── versions.tf                       # Provider version constraints
+├── terraform.tfvars.example          # Example configuration
+├── deploy.sh                         # Automated deployment script
+├── README.md                         # Comprehensive documentation
 ├── modules/
-│   ├── function-app/
-│   ├── key-vault/
-│   ├── api-management/
-│   └── monitoring/
+│   ├── function-app/                 # Azure Functions module
+│   │   ├── main.tf                   # Function Apps & Service Plan
+│   │   ├── variables.tf              # Module inputs
+│   │   └── outputs.tf                # Module outputs
+│   ├── key-vault/                    # Key Vault module
+│   │   ├── main.tf                   # Key Vault & secrets
+│   │   ├── variables.tf              # Module inputs
+│   │   └── outputs.tf                # Module outputs
+│   ├── api-management/               # API Management module
+│   │   ├── main.tf                   # APIM with OpenAPI specs
+│   │   ├── variables.tf              # Module inputs
+│   │   └── outputs.tf                # Module outputs
+│   └── monitoring/                   # Monitoring module
+│       ├── main.tf                   # App Insights & Log Analytics
+│       ├── variables.tf              # Module inputs
+│       └── outputs.tf                # Module outputs
 └── environments/
     └── dev/
+        └── terraform.tfvars          # Dev environment config
 ```
 
 ## Usage Instructions
