@@ -1,0 +1,9 @@
+{
+  "environment": "dev",
+  "timestamp": "2025-06-12T05:01:28Z",
+  "resource_group": "rg-authserver-dev-wus-7zy",
+  "basic_auth_url": "https://func-authserver-basic-dev-wus-7zy.azurewebsites.net",
+  "oauth_url": "https://func-authserver-oauth-dev-wus-7zy.azurewebsites.net",
+  "api_gateway_url": "https://apim-authserver-dev-wus-7zy.azure-api.net",
+  "key_vault_uri": "https://kv-authserver-devwus7zy.vault.azure.net/"
+}

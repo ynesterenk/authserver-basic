@@ -58,8 +58,9 @@ $workflowExists = Test-RequiredFile ".github/workflows/deploy.yml" "GitHub Actio
 if ($workflowExists) {
     $workflowContent = Get-Content ".github/workflows/deploy.yml" -Raw
     $requiredJobs = @("test", "deploy-dev", "deploy-staging", "deploy-prod")
+    
     foreach ($job in $requiredJobs) {
-        if ($workflowContent -match "${job}:") {
+        if ($workflowContent -match "$job:") {
             Write-ValidationMessage "✓ Job '$job' found in workflow" "Success"
         } else {
             Write-ValidationMessage "✗ Job '$job' missing from workflow" "Error"
@@ -151,19 +152,16 @@ if ($script:ValidationFailed) {
     Write-Host "    ❌ CI/CD VALIDATION FAILED" -ForegroundColor $Colors.Error
     Write-Host "============================================`n" -ForegroundColor $Colors.Header
     Write-ValidationMessage "Some required components are missing or misconfigured." "Error"
-    Write-Host ""
-    Write-Host "Please fix the issues above and run the validation again."
-    Write-Host "Refer to CICD-SETUP.md for detailed setup instructions."
-    Write-Host ""
+    Write-Host "`nPlease fix the issues above and run the validation again."
+    Write-Host "Refer to CICD-SETUP.md for detailed setup instructions.`n"
     exit 1
 } else {
     Write-Host "    ✅ CI/CD VALIDATION PASSED" -ForegroundColor $Colors.Success
     Write-Host "============================================`n" -ForegroundColor $Colors.Header
     Write-ValidationMessage "All CI/CD components are properly configured!" "Success"
-    Write-Host "Next steps:"
+    Write-Host "`nNext steps:"
     Write-Host "1. Configure GitHub repository secrets (see CICD-SETUP.md)"
     Write-Host "2. Push to 'develop' branch to test development deployment"
-    Write-Host "3. Create PR to 'main' for staging/production deployment"
-    Write-Host ""
+    Write-Host "3. Create PR to 'main' for staging/production deployment`n"
     exit 0
 }

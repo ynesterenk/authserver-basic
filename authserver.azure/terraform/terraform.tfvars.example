@@ -1,0 +1,36 @@
+# Environment Configuration
+environment    = "dev"
+project_name   = "authserver"
+location       = "East US"
+location_short = "eus"
+
+# Network Security
+allowed_ips = [
+  # Add your IP addresses here for Key Vault access
+  # "203.0.113.1/32",  # Example: Your office IP
+  # "198.51.100.0/24", # Example: VPN range
+]
+
+# Function App Configuration
+function_app_sku = "Y1"   # Consumption plan (cheapest for dev - pay per execution)
+java_version     = "17"  # Latest supported (Azure Functions supports 8, 11, 17 only)
+
+# Key Vault Configuration
+key_vault_sku = "standard"
+
+# API Management Configuration
+apim_sku      = "Developer"  # Free tier for dev
+apim_capacity = 1
+
+# Monitoring Configuration
+log_retention_days = 30
+
+# Common Tags
+common_tags = {
+  Project      = "Java Authorization Server"
+  Environment  = "Development"
+  ManagedBy    = "Terraform"
+  Owner        = "Development Team"
+  CostCenter   = "Engineering"
+  Application  = "AuthServer"
+} 
