@@ -1,0 +1,26 @@
+[
+  {
+    "username": "demo",
+    "password": "demo123",
+    "status": "ACTIVE",
+    "roles": ["user", "read"]
+  },
+  {
+    "username": "admin",
+    "password": "admin123",
+    "status": "ACTIVE",
+    "roles": ["admin", "user", "read", "write"]
+  },
+  {
+    "username": "test",
+    "password": "test123",
+    "status": "INACTIVE",
+    "roles": ["user"]
+  },
+  {
+    "username": "service",
+    "password": "service123",
+    "status": "ACTIVE",
+    "roles": ["service", "read", "write"]
+  }
+] 

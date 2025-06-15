@@ -1,0 +1,47 @@
+[
+  {
+    "clientId": "demo-client",
+    "clientSecret": "demo-secret",
+    "clientName": "Demo Client Application",
+    "status": "ACTIVE",
+    "allowedGrantTypes": ["CLIENT_CREDENTIALS"],
+    "allowedScopes": ["read", "write"],
+    "tokenExpirationSeconds": 3600
+  },
+  {
+    "clientId": "test-client",
+    "clientSecret": "test-secret",
+    "clientName": "Test Client Application",
+    "status": "ACTIVE",
+    "allowedGrantTypes": ["CLIENT_CREDENTIALS"],
+    "allowedScopes": ["read"],
+    "tokenExpirationSeconds": 1800
+  },
+  {
+    "clientId": "admin-client",
+    "clientSecret": "admin-secret",
+    "clientName": "Admin Client Application",
+    "status": "ACTIVE",
+    "allowedGrantTypes": ["CLIENT_CREDENTIALS"],
+    "allowedScopes": ["read", "write", "admin"],
+    "tokenExpirationSeconds": 7200
+  },
+  {
+    "clientId": "service-client",
+    "clientSecret": "service-secret",
+    "clientName": "Service Client Application",
+    "status": "ACTIVE",
+    "allowedGrantTypes": ["CLIENT_CREDENTIALS"],
+    "allowedScopes": ["service", "read", "write"],
+    "tokenExpirationSeconds": 5400
+  },
+  {
+    "clientId": "inactive-client",
+    "clientSecret": "inactive-secret",
+    "clientName": "Inactive Client Application",
+    "status": "INACTIVE",
+    "allowedGrantTypes": ["CLIENT_CREDENTIALS"],
+    "allowedScopes": ["read"],
+    "tokenExpirationSeconds": 3600
+  }
+] 

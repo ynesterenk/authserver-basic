@@ -1,0 +1,37 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "java",
+    "FUNCTIONS_EXTENSION_VERSION": "~4",
+    
+    "KEY_VAULT_URL": "https://kv-authserver-dev.vault.azure.net/",
+    "APPLICATIONINSIGHTS_CONNECTION_STRING": "",
+    
+    "CACHE_TTL_MINUTES": "5",
+    "CACHE_MAX_SIZE": "1000",
+    
+    "OAUTH2_TOKEN_MAX_EXPIRATION_SECONDS": "7200",
+    "OAUTH2_SECURITY_ENABLE_CLIENT_STATUS_CHECK": "true",
+    
+    "JWT_SIGNING_KEY_ID": "jwt-signing-key",
+    "JWT_ISSUER": "https://authserver.example.com",
+    "JWT_AUDIENCE": "api://default",
+    
+    "ARGON2_MEMORY": "65536",
+    "ARGON2_ITERATIONS": "3",
+    "ARGON2_PARALLELISM": "1",
+    "ARGON2_HASH_LENGTH": "32",
+    "ARGON2_SALT_LENGTH": "16",
+    
+    "SPRING_PROFILES_ACTIVE": "local"
+  },
+  "Host": {
+    "LocalHttpPort": 7071,
+    "CORS": "*",
+    "CORSCredentials": false
+  },
+  "ConnectionStrings": {
+    "DefaultConnection": ""
+  }
+} 
