@@ -14,7 +14,7 @@
   {
     "username": "test",
     "password": "test123",
-    "status": "INACTIVE",
+    "status": "DISABLED",
     "roles": ["user"]
   },
   {

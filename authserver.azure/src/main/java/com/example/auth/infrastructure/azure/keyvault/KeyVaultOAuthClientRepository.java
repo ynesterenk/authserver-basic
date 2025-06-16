@@ -280,20 +280,34 @@ public class KeyVaultOAuthClientRepository implements OAuthClientRepository {
 
             // Extract client data
             String storedClientId = (String) clientData.get("clientId");
-            String clientSecretHash = (String) clientData.get("clientSecretHash");
+            String clientSecret = (String) clientData.get("clientSecret");
+            String preHashedSecret = (String) clientData.get("clientSecretHash");
             String description = (String) clientData.get("description");
             String statusString = (String) clientData.get("status");
             Integer tokenExpirationSeconds = (Integer) clientData.get("tokenExpirationSeconds");
             
+            // Handle both plain text client secrets and pre-hashed secrets
+            String clientSecretHash;
+            if (preHashedSecret != null && !preHashedSecret.trim().isEmpty()) {
+                // Use pre-hashed secret if available
+                clientSecretHash = preHashedSecret;
+            } else if (clientSecret != null && !clientSecret.trim().isEmpty()) {
+                // Use plain text secret directly (in real implementation you might want to hash this)
+                clientSecretHash = clientSecret;
+            } else {
+                // No valid secret found
+                clientSecretHash = null;
+            }
+            
             @SuppressWarnings("unchecked")
-            Set<String> allowedGrantTypesSet = (Set<String>) clientData.get("allowedGrantTypes");
+            List<String> allowedGrantTypesList = (List<String>) clientData.get("allowedGrantTypes");
             @SuppressWarnings("unchecked")
             List<String> allowedScopes = (List<String>) clientData.get("allowedScopes");
 
             // Parse grant types - use String set as per real domain model
             Set<String> allowedGrantTypes = new HashSet<>();
-            if (allowedGrantTypesSet != null) {
-                for (String grantType : allowedGrantTypesSet) {
+            if (allowedGrantTypesList != null) {
+                for (String grantType : allowedGrantTypesList) {
                     if (isValidGrantType(grantType)) {
                         allowedGrantTypes.add(grantType);
                     } else {

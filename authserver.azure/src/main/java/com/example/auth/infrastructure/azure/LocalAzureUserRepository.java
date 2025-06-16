@@ -8,45 +8,94 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired; // Added import for Autowired
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.Resource;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+// import java.util.concurrent.ConcurrentHashMap; // Unused import
 
 /**
  * Local file-based implementation of UserRepository for Azure Functions development.
  * Loads user data from a JSON file in the classpath.
  */
 public class LocalAzureUserRepository implements UserRepository {
-
     private static final Logger logger = LoggerFactory.getLogger(LocalAzureUserRepository.class);
-    private static final String DEFAULT_USERS_FILE = "local-users.json";
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
     private final PasswordHasher passwordHasher;
-    private final Map<String, User> users;
-    private final Object lock = new Object();
+    private final Map<String, User> usersByUsername = new HashMap<>();
+    private final List<User> allUsers = new ArrayList<>(); // Retained for potential future use, though not directly used by current UserRepository methods
+    private final RepositoryMetadata metadata;
 
     /**
      * CRITICAL: Constructor with PasswordHasher parameter as required by configuration.
      */
+    @Autowired
     public LocalAzureUserRepository(PasswordHasher passwordHasher) {
+        this(passwordHasher, loadUsersFromClasspath());
+    }
+
+    // New constructor for testability
+    public LocalAzureUserRepository(PasswordHasher passwordHasher, InputStream usersInputStream) {
         this.passwordHasher = passwordHasher;
-        this.users = new ConcurrentHashMap<>();
-        loadUsersFromFile();
-        logger.info("LocalAzureUserRepository initialized with {} users", users.size());
+        
+        // FIXED: Fail fast for null stream instead of creating empty repository
+        if (usersInputStream == null) {
+            throw new IllegalArgumentException("User data input stream cannot be null");
+        }
+        
+        try {
+            // Use the static objectMapper for deserialization
+            List<UserDto> userDtos = objectMapper.readValue(usersInputStream, new TypeReference<List<UserDto>>() {});
+            for (UserDto dto : userDtos) {
+                // Hash password before storing if it's not already hashed
+                // Assuming DTO contains plain password and it needs hashing during loading
+                String hashedPassword = passwordHasher.hashPassword(dto.getPassword());
+                User user = new User(
+                        dto.getUsername(),
+                        hashedPassword, // Store hashed password
+                        UserStatus.valueOf(dto.getStatus().toUpperCase()),
+                        dto.getRoles()
+                );
+                usersByUsername.put(user.getUsername().toLowerCase(), user);
+                allUsers.add(user);
+            }
+            this.metadata = new RepositoryMetadata(allUsers.size(), "local-users.json-INPUTSTREAM");
+        } catch (IOException e) {
+            logger.error("Failed to load users from input stream", e);
+            throw new IllegalStateException("Failed to load users from input stream", e);
+        }
+    }
+
+    private static InputStream loadUsersFromClasspath() {
+        try {
+            Resource resource = new ClassPathResource("local-users.json");
+            if (!resource.exists()) {
+                logger.error("local-users.json not found on classpath. This is a critical configuration file.");
+                // Throwing an exception here is appropriate as the repository cannot function without this file.
+                throw new IllegalStateException("local-users.json not found on classpath. Please ensure it is present.");
+            }
+            return resource.getInputStream();
+        } catch (IOException e) {
+            logger.error("Failed to load local-users.json from classpath", e);
+            throw new IllegalStateException("Failed to load local-users.json from classpath", e);
+        }
     }
 
     @Override
     public Optional<User> findByUsername(String username) {
         if (username == null || username.trim().isEmpty()) {
-            throw new IllegalArgumentException("Username cannot be null or empty");
+            // Consider logging this as a warning or info, as it might indicate a programming error elsewhere.
+            // throw new IllegalArgumentException("Username cannot be null or empty"); // Or return Optional.empty()
+            logger.warn("Attempted to find user with null or empty username.");
+            return Optional.empty();
         }
 
         String normalizedUsername = username.toLowerCase().trim();
-        User user = users.get(normalizedUsername);
+        User user = usersByUsername.get(normalizedUsername);
         
         if (user != null) {
             logger.debug("User found: {}", maskUsername(normalizedUsername));
@@ -59,35 +108,49 @@ public class LocalAzureUserRepository implements UserRepository {
 
     @Override
     public Map<String, User> getAllUsers() {
-        return new HashMap<>(users);
+        // Return an unmodifiable map to prevent external modification
+        return Collections.unmodifiableMap(new HashMap<>(usersByUsername));
     }
 
-    // Additional methods for local repository functionality
+    // Additional methods for local repository functionality (consider if these should be part of the UserRepository interface)
     public List<User> findAll() {
-        return new ArrayList<>(users.values());
+        // Return an unmodifiable list
+        return Collections.unmodifiableList(new ArrayList<>(usersByUsername.values()));
     }
 
+    // This method is not part of UserRepository, consider its placement.
+    // If it's for testing or admin purposes, it might be okay here.
     public void save(User user) {
         if (user == null) {
             throw new IllegalArgumentException("User cannot be null");
         }
+        if (user.getUsername() == null || user.getUsername().trim().isEmpty()) {
+            throw new IllegalArgumentException("User username cannot be null or empty");
+        }
 
-        synchronized (lock) {
+        // Synchronize on a dedicated lock object or usersByUsername if mutations are frequent.
+        // For this local repository, synchronizing on usersByUsername is likely fine.
+        synchronized (usersByUsername) {
             String normalizedUsername = user.getUsername().toLowerCase().trim();
-            users.put(normalizedUsername, user);
+            usersByUsername.put(normalizedUsername, user);
+            // Update allUsers list as well if it's meant to be a consistent view
+            allUsers.removeIf(u -> u.getUsername().equalsIgnoreCase(normalizedUsername));
+            allUsers.add(user);
             logger.info("User saved: {}", maskUsername(normalizedUsername));
         }
     }
 
+    // Not part of UserRepository interface
     public void deleteByUsername(String username) {
         if (username == null || username.trim().isEmpty()) {
-            throw new IllegalArgumentException("Username cannot be null or empty");
+            throw new IllegalArgumentException("Username cannot be null or empty for deletion");
         }
 
-        synchronized (lock) {
+        synchronized (usersByUsername) {
             String normalizedUsername = username.toLowerCase().trim();
-            User removedUser = users.remove(normalizedUsername);
+            User removedUser = usersByUsername.remove(normalizedUsername);
             if (removedUser != null) {
+                allUsers.removeIf(u -> u.getUsername().equalsIgnoreCase(normalizedUsername));
                 logger.info("User deleted: {}", maskUsername(normalizedUsername));
             } else {
                 logger.warn("User not found for deletion: {}", maskUsername(normalizedUsername));
@@ -95,136 +158,31 @@ public class LocalAzureUserRepository implements UserRepository {
         }
     }
 
-    public boolean existsByUsername(String username) {
+    // FIXED: Renamed to match UserRepository interface
+    @Override
+    public boolean userExists(String username) {
         if (username == null || username.trim().isEmpty()) {
             return false;
         }
         
         String normalizedUsername = username.toLowerCase().trim();
-        return users.containsKey(normalizedUsername);
+        return usersByUsername.containsKey(normalizedUsername);
     }
 
-    public long count() {
-        return users.size();
+    // FIXED: Renamed to match UserRepository interface
+    @Override
+    public long getUserCount() {
+        return usersByUsername.size();
     }
 
-    /**
-     * Loads users from the local JSON file.
-     */
-    private void loadUsersFromFile() {
+    // FIXED: Added explicit implementation to override interface default
+    @Override
+    public boolean isHealthy() {
         try {
-            ClassPathResource resource = new ClassPathResource(DEFAULT_USERS_FILE);
-            if (!resource.exists()) {
-                logger.warn("Local users file not found: {}, creating default users", DEFAULT_USERS_FILE);
-                createDefaultUsers();
-                return;
-            }
-
-            try (InputStream inputStream = resource.getInputStream()) {
-                List<Map<String, Object>> userDataList = objectMapper.readValue(
-                    inputStream, 
-                    new TypeReference<List<Map<String, Object>>>() {}
-                );
-
-                int loadedCount = 0;
-                for (Map<String, Object> userData : userDataList) {
-                    try {
-                        User user = parseUserFromData(userData);
-                        if (user != null) {
-                            String normalizedUsername = user.getUsername().toLowerCase().trim();
-                            users.put(normalizedUsername, user);
-                            loadedCount++;
-                        }
-                    } catch (Exception e) {
-                        logger.warn("Failed to parse user data: {}", userData, e);
-                    }
-                }
-
-                logger.info("Loaded {} users from {}", loadedCount, DEFAULT_USERS_FILE);
-            }
-
+            return usersByUsername != null;
         } catch (Exception e) {
-            logger.error("Failed to load users from file: {}", DEFAULT_USERS_FILE, e);
-            createDefaultUsers();
-        }
-    }
-
-    /**
-     * Parses a User object from JSON data.
-     */
-    private User parseUserFromData(Map<String, Object> userData) {
-        String username = (String) userData.get("username");
-        String password = (String) userData.get("password");
-        String passwordHash = (String) userData.get("passwordHash");
-        String statusString = (String) userData.get("status");
-        
-        @SuppressWarnings("unchecked")
-        List<String> roles = (List<String>) userData.get("roles");
-        if (roles == null) {
-            roles = new ArrayList<>();
-        }
-
-        if (username == null || username.trim().isEmpty()) {
-            logger.warn("Invalid user data: missing username");
-            return null;
-        }
-
-        // Handle password hashing if plain password is provided
-        if (passwordHash == null && password != null) {
-            passwordHash = passwordHasher.hashPassword(password);
-            logger.debug("Generated password hash for user: {}", maskUsername(username));
-        }
-
-        if (passwordHash == null) {
-            logger.warn("Invalid user data: missing password or passwordHash for user {}", maskUsername(username));
-            return null;
-        }
-
-        // Parse status
-        UserStatus status = UserStatus.ACTIVE; // Default
-        if (statusString != null) {
-            try {
-                status = UserStatus.valueOf(statusString.toUpperCase());
-            } catch (IllegalArgumentException e) {
-                logger.warn("Invalid user status '{}' for user '{}', using ACTIVE", 
-                           statusString, maskUsername(username));
-            }
-        }
-
-        // CRITICAL: Use correct User constructor - new User(username, passwordHash, status, roles)
-        return new User(username, passwordHash, status, roles);
-    }
-
-    /**
-     * Creates default users for development.
-     */
-    private void createDefaultUsers() {
-        logger.info("Creating default users for local development");
-
-        try {
-            // Create demo user
-            String demoPasswordHash = passwordHasher.hashPassword("demo123");
-            User demoUser = new User("demo", demoPasswordHash, UserStatus.ACTIVE, 
-                                   Arrays.asList("user", "read"));
-            
-            // Create admin user
-            String adminPasswordHash = passwordHasher.hashPassword("admin123");
-            User adminUser = new User("admin", adminPasswordHash, UserStatus.ACTIVE, 
-                                    Arrays.asList("admin", "user", "read", "write"));
-
-            // Create test user (disabled)
-            String testPasswordHash = passwordHasher.hashPassword("test123");
-            User testUser = new User("test", testPasswordHash, UserStatus.DISABLED, 
-                                   Arrays.asList("user"));
-
-            users.put("demo", demoUser);
-            users.put("admin", adminUser);
-            users.put("test", testUser);
-
-            logger.info("Created {} default users", users.size());
-
-        } catch (Exception e) {
-            logger.error("Failed to create default users", e);
+            logger.error("Repository health check failed", e);
+            return false;
         }
     }
 
@@ -233,24 +191,77 @@ public class LocalAzureUserRepository implements UserRepository {
      */
     private String maskUsername(String username) {
         if (username == null || username.length() <= 2) {
-            return "***";
+            return "***"; // Or return the original if too short to mask meaningfully
         }
-        return username.charAt(0) + "*".repeat(username.length() - 2) + username.charAt(username.length() - 1);
+        // More robust masking might be needed depending on username character sets
+        return username.charAt(0) + "*".repeat(Math.max(0, username.length() - 2)) + username.charAt(username.length() - 1);
     }
 
     /**
      * Gets repository statistics for monitoring.
+     * This is specific to this implementation and not part of the UserRepository interface.
      */
     public Map<String, Object> getStats() {
         Map<String, Object> stats = new HashMap<>();
-        stats.put("totalUsers", users.size());
-        
-        long activeUsers = users.values().stream()
-                .mapToLong(user -> user.isActive() ? 1 : 0)
-                .sum();
+        stats.put("totalUsers", usersByUsername.size());
+        // Consider thread-safety if usersByUsername can be modified concurrently during stream processing.
+        // For this local repo, it's likely okay if modifications are synchronized.
+        long activeUsers = usersByUsername.values().stream()
+                .filter(Objects::nonNull) // Add null check for robustness
+                .filter(User::isActive) // Use method reference
+                .count();
         stats.put("activeUsers", activeUsers);
-        stats.put("inactiveUsers", users.size() - activeUsers);
+        stats.put("inactiveUsers", usersByUsername.size() - activeUsers);
+        stats.put("metadata", metadata); // Include metadata in stats
         
-        return stats;
+        return Collections.unmodifiableMap(stats);
     }
-} 
+
+    // Inner DTO class for loading users from JSON
+    // Simplified to match the core User domain model
+    private static class UserDto {
+        private String username;
+        private String password; // Plain password from JSON - will be hashed
+        private String status;
+        private List<String> roles;
+
+        // Getters - necessary for Jackson deserialization
+        public String getUsername() { return username; }
+        public String getPassword() { return password; }
+        public String getStatus() { return status; }
+        public List<String> getRoles() { return roles; }
+
+        // Setters - needed for Jackson
+        public void setUsername(String username) { this.username = username; }
+        public void setPassword(String password) { this.password = password; }
+        public void setStatus(String status) { this.status = status; }
+        public void setRoles(List<String> roles) { this.roles = roles; }
+    }
+
+    // Inner class for repository metadata
+    public static class RepositoryMetadata {
+        private final int userCount;
+        private final String source;
+
+        public RepositoryMetadata(int userCount, String source) {
+            this.userCount = userCount;
+            this.source = source;
+        }
+
+        public int getUserCount() {
+            return userCount;
+        }
+
+        public String getSource() {
+            return source;
+        }
+
+        @Override
+        public String toString() {
+            return "RepositoryMetadata{" +
+                    "userCount=" + userCount +
+                    ", source=\'" + source + "\'" +
+                    '}';
+        }
+    }
+}

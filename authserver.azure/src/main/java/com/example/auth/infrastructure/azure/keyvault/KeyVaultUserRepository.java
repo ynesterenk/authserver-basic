@@ -234,8 +234,22 @@ public class KeyVaultUserRepository implements UserRepository {
 
             // Extract user data
             String storedUsername = (String) userData.get("username");
-            String passwordHash = (String) userData.get("passwordHash");
+            String plainPassword = (String) userData.get("password");
+            String preHashedPassword = (String) userData.get("passwordHash");
             String statusString = (String) userData.get("status");
+            
+            // Handle both plain text passwords and pre-hashed passwords
+            String passwordHash;
+            if (preHashedPassword != null && !preHashedPassword.trim().isEmpty()) {
+                // Use pre-hashed password if available
+                passwordHash = preHashedPassword;
+            } else if (plainPassword != null && !plainPassword.trim().isEmpty()) {
+                // Hash plain text password
+                passwordHash = passwordHasher.hashPassword(plainPassword);
+            } else {
+                // No valid password found
+                passwordHash = null;
+            }
             
             @SuppressWarnings("unchecked")
             List<String> roles = (List<String>) userData.get("roles");

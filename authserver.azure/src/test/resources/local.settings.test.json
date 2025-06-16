@@ -1,0 +1,27 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "",
+    "FUNCTIONS_WORKER_RUNTIME": "java",
+    "FUNCTIONS_EXTENSION_VERSION": "~4",
+    "SPRING_PROFILES_ACTIVE": "test",
+    "CACHE_TTL_MINUTES": "1",
+    "CACHE_MAX_SIZE": "10",
+    "LOCAL_REPOSITORIES_ENABLED": "true",
+    "AZURE_KEYVAULT_ENABLED": "false",
+    "AUTH_PASSWORD_HASHING_ENABLED": "true",
+    "OAUTH2_TOKEN_EXPIRATION_SECONDS": "3600",
+    "OAUTH2_TOKEN_ISSUER": "test-issuer",
+    "OAUTH2_TOKEN_AUDIENCE": "test-audience",
+    "OAUTH2_INTROSPECTION_ENABLED": "true",
+    "TEST_PERFORMANCE_ENABLED": "true",
+    "TEST_INTEGRATION_ENABLED": "true",
+    "LOGGING_LEVEL_COM_EXAMPLE_AUTH": "DEBUG"
+  },
+  "Host": {
+    "LocalHttpPort": 7071,
+    "CORS": "*",
+    "CORSCredentials": false
+  },
+  "ConnectionStrings": {}
+}

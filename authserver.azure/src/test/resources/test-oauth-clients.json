@@ -1,0 +1,47 @@
+{
+  "test-client": {
+    "clientId": "test-client",
+    "clientSecret": "secret123",
+    "status": "ACTIVE",
+    "allowedGrantTypes": ["client_credentials"],
+    "allowedScopes": ["read", "write"],
+    "tokenExpirationSeconds": 3600,
+    "description": "Test Client"
+  },
+  "admin-client": {
+    "clientId": "admin-client",
+    "clientSecret": "adminsecret456",
+    "status": "ACTIVE",
+    "allowedGrantTypes": ["client_credentials", "authorization_code"],
+    "allowedScopes": ["read", "write", "admin"],
+    "tokenExpirationSeconds": 7200,
+    "description": "Admin Client"
+  },
+  "disabled-client": {
+    "clientId": "disabled-client",
+    "clientSecret": "disabledsecret789",
+    "status": "DISABLED",
+    "allowedGrantTypes": ["client_credentials"],
+    "allowedScopes": ["read"],
+    "tokenExpirationSeconds": 1800,
+    "description": "Disabled Client"
+  },
+  "suspended-client": {
+    "clientId": "suspended-client",
+    "clientSecret": "suspendedsecret999",
+    "status": "SUSPENDED",
+    "allowedGrantTypes": ["client_credentials"],
+    "allowedScopes": ["read"],
+    "tokenExpirationSeconds": 3600,
+    "description": "Suspended Client"
+  },
+  "multi-grant-client": {
+    "clientId": "multi-grant-client",
+    "clientSecret": "multigrantsecret111",
+    "status": "ACTIVE",
+    "allowedGrantTypes": ["client_credentials", "authorization_code", "refresh_token"],
+    "allowedScopes": ["read", "write", "admin", "user:profile", "system:manage"],
+    "tokenExpirationSeconds": 14400,
+    "description": "Multi Grant Type Client"
+  }
+}

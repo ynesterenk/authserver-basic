@@ -4,7 +4,7 @@
     "clientSecret": "demo-secret",
     "clientName": "Demo Client Application",
     "status": "ACTIVE",
-    "allowedGrantTypes": ["CLIENT_CREDENTIALS"],
+    "allowedGrantTypes": ["client_credentials"],
     "allowedScopes": ["read", "write"],
     "tokenExpirationSeconds": 3600
   },
@@ -13,7 +13,7 @@
     "clientSecret": "test-secret",
     "clientName": "Test Client Application",
     "status": "ACTIVE",
-    "allowedGrantTypes": ["CLIENT_CREDENTIALS"],
+    "allowedGrantTypes": ["client_credentials"],
     "allowedScopes": ["read"],
     "tokenExpirationSeconds": 1800
   },
@@ -22,7 +22,7 @@
     "clientSecret": "admin-secret",
     "clientName": "Admin Client Application",
     "status": "ACTIVE",
-    "allowedGrantTypes": ["CLIENT_CREDENTIALS"],
+    "allowedGrantTypes": ["client_credentials"],
     "allowedScopes": ["read", "write", "admin"],
     "tokenExpirationSeconds": 7200
   },
@@ -31,7 +31,7 @@
     "clientSecret": "service-secret",
     "clientName": "Service Client Application",
     "status": "ACTIVE",
-    "allowedGrantTypes": ["CLIENT_CREDENTIALS"],
+    "allowedGrantTypes": ["client_credentials"],
     "allowedScopes": ["service", "read", "write"],
     "tokenExpirationSeconds": 5400
   },
@@ -39,8 +39,8 @@
     "clientId": "inactive-client",
     "clientSecret": "inactive-secret",
     "clientName": "Inactive Client Application",
-    "status": "INACTIVE",
-    "allowedGrantTypes": ["CLIENT_CREDENTIALS"],
+    "status": "DISABLED",
+    "allowedGrantTypes": ["client_credentials"],
     "allowedScopes": ["read"],
     "tokenExpirationSeconds": 3600
   }

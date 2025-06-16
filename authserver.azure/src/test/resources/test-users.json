@@ -1,0 +1,26 @@
+{
+  "testuser": {
+    "username": "testuser",
+    "password": "plaintext123",
+    "status": "ACTIVE",
+    "roles": ["user", "read"]
+  },
+  "adminuser": {
+    "username": "adminuser",
+    "password": "adminpass456",
+    "status": "ACTIVE",
+    "roles": ["admin", "read", "write"]
+  },
+  "disableduser": {
+    "username": "disableduser",
+    "password": "disabled789",
+    "status": "DISABLED",
+    "roles": ["user"]
+  },
+  "multipleroluser": {
+    "username": "multipleroluser",
+    "password": "multipass999",
+    "status": "ACTIVE",
+    "roles": ["user", "read", "write", "admin", "system"]
+  }
+}

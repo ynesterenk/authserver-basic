@@ -31,6 +31,19 @@ public class LocalAzureOAuthClientRepository implements OAuthClientRepository {
         loadClientsFromFile();
         logger.info("LocalAzureOAuthClientRepository initialized with {} clients", clients.size());
     }
+    
+    /**
+     * Constructor that accepts a custom input stream for testing.
+     */
+    public LocalAzureOAuthClientRepository(InputStream inputStream) {
+        this.clients = new ConcurrentHashMap<>();
+        if (inputStream != null) {
+            loadClientsFromStream(inputStream);
+        } else {
+            loadClientsFromFile();
+        }
+        logger.info("LocalAzureOAuthClientRepository initialized with {} clients", clients.size());
+    }
 
     @Override
     public Map<String, OAuthClient> getAllClients() {
@@ -142,6 +155,37 @@ public class LocalAzureOAuthClientRepository implements OAuthClientRepository {
 
     public long count() {
         return clients.size();
+    }
+
+    /**
+     * Loads OAuth clients from an input stream.
+     */
+    private void loadClientsFromStream(InputStream inputStream) {
+        try {
+            List<Map<String, Object>> clientDataList = objectMapper.readValue(
+                inputStream, 
+                new TypeReference<List<Map<String, Object>>>() {}
+            );
+
+            int loadedCount = 0;
+            for (Map<String, Object> clientData : clientDataList) {
+                try {
+                    OAuthClient client = parseClientFromData(clientData);
+                    if (client != null) {
+                        String normalizedClientId = client.getClientId().toLowerCase().trim();
+                        clients.put(normalizedClientId, client);
+                        loadedCount++;
+                    }
+                } catch (Exception e) {
+                    logger.warn("Failed to parse OAuth client data: {}", clientData, e);
+                }
+            }
+
+            logger.info("Loaded {} OAuth clients from input stream", loadedCount);
+        } catch (Exception e) {
+            logger.error("Failed to load OAuth clients from input stream", e);
+            createDefaultClients();
+        }
     }
 
     /**
