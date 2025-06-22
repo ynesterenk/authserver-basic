@@ -1,5 +1,7 @@
 package com.example.auth.domain.model;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
 
 import java.util.Objects;
@@ -22,7 +24,9 @@ public final class AuthenticationRequest {
      * @param username the username to authenticate
      * @param password the plaintext password to verify
      */
-    public AuthenticationRequest(String username, String password) {
+    @JsonCreator
+    public AuthenticationRequest(@JsonProperty("username") String username, 
+                                @JsonProperty("password") String password) {
         this.username = validateUsername(username);
         this.password = validatePassword(password);
     }

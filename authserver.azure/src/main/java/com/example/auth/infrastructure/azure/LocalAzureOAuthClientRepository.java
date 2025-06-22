@@ -3,20 +3,26 @@ package com.example.auth.infrastructure.azure;
 import com.example.auth.domain.model.oauth.OAuthClient;
 import com.example.auth.domain.model.oauth.ClientStatus;
 import com.example.auth.domain.port.oauth.OAuthClientRepository;
+import com.example.auth.domain.util.oauth.ClientSecretHasher;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Profile;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.Resource;
+import org.springframework.stereotype.Component;
 
 import java.io.InputStream;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Local file-based implementation of OAuthClientRepository for Azure Functions development.
- * Loads OAuth client data from a JSON file in the classpath.
+ * Local file-based implementation of OAuthClientRepository for Azure Functions.
+ * Used for local development and testing with Azure Functions.
  */
+@Component
+@Profile("azure")
 public class LocalAzureOAuthClientRepository implements OAuthClientRepository {
 
     private static final Logger logger = LoggerFactory.getLogger(LocalAzureOAuthClientRepository.class);

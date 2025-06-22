@@ -5,6 +5,8 @@
     "FUNCTIONS_WORKER_RUNTIME": "java",
     "FUNCTIONS_EXTENSION_VERSION": "~4",
     
+    "MAIN_CLASS": "com.example.auth.AzureApplication",
+    
     "KEY_VAULT_URL": "https://kv-authserver-dev.vault.azure.net/",
     "APPLICATIONINSIGHTS_CONNECTION_STRING": "",
     

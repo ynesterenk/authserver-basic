@@ -22,13 +22,7 @@
       "Function": "Information",
       "Host.Aggregator": "Trace"
     }
-  },
-  "customHandler": {
-    "description": {
-      "defaultExecutablePath": "handler.exe"
-    },
-    "enableForwardingHttpRequest": false
-  },
+  },  
   "extensions": {
     "http": {
       "routePrefix": "api"

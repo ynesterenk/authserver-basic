@@ -1,6 +1,7 @@
 package com.example.auth;
 
 import com.example.auth.infrastructure.azure.config.AzureFunctionConfiguration;
+import com.example.auth.infrastructure.azure.functions.FunctionConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.SpringApplication;
@@ -12,8 +13,16 @@ import org.springframework.context.annotation.Import;
  * Main application class for Azure Functions Authorization Server.
  * Provides Spring Boot application context for Azure Functions.
  */
-@SpringBootApplication
-@Import(AzureFunctionConfiguration.class)
+@SpringBootApplication(
+    scanBasePackages = {
+        "com.example.auth.domain",
+        "com.example.auth.infrastructure.azure"
+    },
+    exclude = {
+        // Exclude any conflicting auto-configurations if needed
+    }
+)
+@Import({AzureFunctionConfiguration.class, FunctionConfiguration.class})
 public class AzureApplication {
 
     private static final Logger logger = LoggerFactory.getLogger(AzureApplication.class);

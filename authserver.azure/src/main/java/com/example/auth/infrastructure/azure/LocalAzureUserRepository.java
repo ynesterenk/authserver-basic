@@ -9,8 +9,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired; // Added import for Autowired
+import org.springframework.context.annotation.Profile;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
+import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -18,9 +20,11 @@ import java.util.*;
 // import java.util.concurrent.ConcurrentHashMap; // Unused import
 
 /**
- * Local file-based implementation of UserRepository for Azure Functions development.
- * Loads user data from a JSON file in the classpath.
+ * Local file-based implementation of UserRepository for Azure Functions.
+ * Used for local development and testing with Azure Functions.
  */
+@Component
+@Profile("azure")
 public class LocalAzureUserRepository implements UserRepository {
     private static final Logger logger = LoggerFactory.getLogger(LocalAzureUserRepository.class);
     private static final ObjectMapper objectMapper = new ObjectMapper();

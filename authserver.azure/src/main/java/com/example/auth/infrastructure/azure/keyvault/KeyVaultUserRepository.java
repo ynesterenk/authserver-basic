@@ -13,6 +13,10 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Profile;
+import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.util.*;
@@ -22,6 +26,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * Azure Key Vault implementation of UserRepository.
  * Stores user data as JSON secrets in Azure Key Vault with caching.
  */
+@Component
+@Profile({"dev", "prod"})
 public class KeyVaultUserRepository implements UserRepository {
 
     private static final Logger logger = LoggerFactory.getLogger(KeyVaultUserRepository.class);
@@ -34,10 +40,11 @@ public class KeyVaultUserRepository implements UserRepository {
     private final Cache<String, Optional<User>> userCache;
     private final Cache<String, Set<String>> userListCache;
 
-    public KeyVaultUserRepository(SecretClient secretClient, 
-                                 PasswordHasher passwordHasher, 
-                                 int cacheTtlMinutes, 
-                                 long cacheMaxSize) {
+    @Autowired
+    public KeyVaultUserRepository(SecretClient secretClient,
+                                 PasswordHasher passwordHasher,
+                                 @Value("${cache.ttl.minutes:5}") int cacheTtlMinutes,
+                                 @Value("${cache.max.size:1000}") long cacheMaxSize) {
         this.secretClient = secretClient;
         this.passwordHasher = passwordHasher;
         

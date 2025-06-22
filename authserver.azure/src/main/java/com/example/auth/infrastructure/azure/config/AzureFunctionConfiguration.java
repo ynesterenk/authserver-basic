@@ -23,6 +23,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.context.annotation.Profile;
 
 /**
@@ -51,7 +52,7 @@ public class AzureFunctionConfiguration {
 
     /**
      * Creates a SecretClient for Azure Key Vault using Managed Identity.
-     * Only available in Azure environments (dev, prod).
+     * Only available in deployed Azure environments (dev, prod).
      */
     @Bean
     @Profile({"dev", "prod"})
@@ -77,6 +78,7 @@ public class AzureFunctionConfiguration {
      * Creates the password hasher for user authentication.
      */
     @Bean
+    @Primary
     public PasswordHasher passwordHasher() {
         logger.info("Creating PasswordHasher bean");
         return new PasswordHasher();
@@ -86,54 +88,63 @@ public class AzureFunctionConfiguration {
      * Creates the client secret hasher for OAuth client authentication.
      */
     @Bean
+    @Primary
     public ClientSecretHasher clientSecretHasher() {
         logger.info("Creating ClientSecretHasher bean");
         return new ClientSecretHasher();
     }
 
     // ========== Repository Configuration - Local Profile ==========
+    // NOTE: Repository beans are now defined using @Component annotations on the classes themselves
+    // These bean definitions are commented out to avoid conflicts
 
     /**
      * Local file-based user repository for development.
      */
-    @Bean
-    @Profile("local")
-    public UserRepository localUserRepository(PasswordHasher passwordHasher) {
-        logger.info("Creating LocalAzureUserRepository for local development");
-        return new LocalAzureUserRepository(passwordHasher);
-    }
+    // @Bean
+    // @Primary
+    // @Profile("local")
+    // public UserRepository localUserRepository(PasswordHasher passwordHasher) {
+    //     logger.info("Creating LocalAzureUserRepository for local development");
+    //     return new LocalAzureUserRepository(passwordHasher);
+    // }
 
     /**
      * Local file-based OAuth client repository for development.
      */
-    @Bean
-    @Profile("local")
-    public OAuthClientRepository localOAuthClientRepository() {
-        logger.info("Creating LocalAzureOAuthClientRepository for local development");
-        return new LocalAzureOAuthClientRepository();
-    }
+    // @Bean
+    // @Primary
+    // @Profile("local")
+    // public OAuthClientRepository localOAuthClientRepository() {
+    //     logger.info("Creating LocalAzureOAuthClientRepository for local development");
+    //     return new LocalAzureOAuthClientRepository();
+    // }
 
     // ========== Repository Configuration - Azure Profiles ==========
+    // NOTE: Repository beans are now defined using @Component annotations on the classes themselves
+    // These bean definitions are commented out to avoid conflicts
 
     /**
      * Azure Key Vault user repository for dev/prod environments.
      */
-    @Bean
-    @Profile({"dev", "prod"})
-    public UserRepository keyVaultUserRepository(SecretClient secretClient, PasswordHasher passwordHasher) {
-        logger.info("Creating KeyVaultUserRepository for Azure environment");
-        return new KeyVaultUserRepository(secretClient, passwordHasher, cacheTtlMinutes, cacheMaxSize);
-    }
+    // @Bean
+    // @Primary
+    // @Profile({"dev", "prod"})
+    // public UserRepository keyVaultUserRepository(SecretClient secretClient, PasswordHasher passwordHasher) {
+    //     logger.info("Creating KeyVaultUserRepository for Azure environment");
+    //     return new KeyVaultUserRepository(secretClient, passwordHasher, cacheTtlMinutes, cacheMaxSize);
+    // }
 
     /**
      * Azure Key Vault OAuth client repository for dev/prod environments.
      */
-    @Bean
-    @Profile({"dev", "prod"})
-    public OAuthClientRepository keyVaultOAuthClientRepository(SecretClient secretClient) {
-        logger.info("Creating KeyVaultOAuthClientRepository for Azure environment");
-        return new KeyVaultOAuthClientRepository(secretClient, cacheTtlMinutes, cacheMaxSize);
-    }
+    // @Bean
+    // @Primary
+    // @Profile({"dev", "prod"})
+    // public OAuthClientRepository keyVaultOAuthClientRepository(SecretClient secretClient) {
+    //     logger.info("Creating KeyVaultOAuthClientRepository for Azure environment");
+    //     return new KeyVaultOAuthClientRepository(secretClient, cacheTtlMinutes, cacheMaxSize);
+    // }
 
     // ========== Service Configuration ==========
 
@@ -142,6 +153,7 @@ public class AzureFunctionConfiguration {
      * Uses UserRepository and PasswordHasher.
      */
     @Bean
+    @Primary
     public AuthenticatorService authenticatorService(UserRepository userRepository, 
                                                     PasswordHasher passwordHasher) {
         logger.info("Creating BasicAuthenticatorService with constructor injection");
@@ -152,6 +164,7 @@ public class AzureFunctionConfiguration {
      * JWT token service for OAuth2 token generation.
      */
     @Bean
+    @Primary
     public OAuth2TokenService tokenService() {
         logger.info("Creating JwtTokenService");
         return new JwtTokenService();
@@ -162,6 +175,7 @@ public class AzureFunctionConfiguration {
      * Uses @Autowired field injection - Spring will handle dependency injection.
      */
     @Bean
+    @Primary
     public ClientCredentialsService clientCredentialsService() {
         logger.info("Creating ClientCredentialsServiceImpl with @Autowired field injection");
         return new ClientCredentialsServiceImpl();
@@ -173,6 +187,7 @@ public class AzureFunctionConfiguration {
      * Application metrics and monitoring bean.
      */
     @Bean
+    @Primary
     public AzureFunctionMetrics azureFunctionMetrics() {
         logger.info("Creating AzureFunctionMetrics bean");
         return new AzureFunctionMetrics();

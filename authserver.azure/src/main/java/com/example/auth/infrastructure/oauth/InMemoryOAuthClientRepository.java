@@ -6,14 +6,18 @@ import com.example.auth.domain.port.oauth.OAuthClientRepository;
 import com.example.auth.domain.util.oauth.ClientSecretHasher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Profile;
+import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.util.*;
 
 /**
- * In-memory implementation of OAuthClientRepository for testing and local development.
- * This implementation stores OAuth clients in memory with pre-configured test clients.
+ * In-memory implementation of OAuthClientRepository for unit testing.
+ * This implementation is only active when no specific profile is set.
  */
+@Component
+@Profile("!local & !azure & !dev & !prod")
 public class InMemoryOAuthClientRepository implements OAuthClientRepository {
 
     private static final Logger logger = LoggerFactory.getLogger(InMemoryOAuthClientRepository.class);

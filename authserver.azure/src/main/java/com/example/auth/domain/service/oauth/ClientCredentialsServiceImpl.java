@@ -209,26 +209,41 @@ public class ClientCredentialsServiceImpl implements ClientCredentialsService {
      * @throws OAuth2AuthenticationException if authentication fails
      */
     private OAuthClient authenticateClient(String clientId, String clientSecret) {
+        logger.info("=== Client Authentication Debug ===");
+        logger.info("Received clientId: '{}'", clientId);
+        logger.info("Received clientSecret: '{}'", clientSecret);
+        
         // Find client by ID
         Optional<OAuthClient> clientOpt = clientRepository.findByClientId(clientId);
         if (clientOpt.isEmpty()) {
-            logger.debug("Client not found: {}", clientId);
+            logger.info("Client not found: {}", clientId);
             throw new OAuth2AuthenticationException(
                 OAuthError.invalidClient("Client not found")
             );
         }
 
         OAuthClient client = clientOpt.get();
+        
+        // Add debug logging for the stored values
+        logger.info("Found client '{}', stored secret hash: '{}'", clientId, client.getClientSecretHash());
+        logger.info("Client details - ID: '{}', Status: {}, AllowedScopes: {}", 
+                    client.getClientId(), client.getStatus(), client.getAllowedScopes());
 
         // Verify client secret
-        if (!secretHasher.verifyClientSecret(clientSecret, client.getClientSecretHash())) {
-            logger.debug("Invalid client secret for client: {}", clientId);
+        logger.info("Attempting to verify provided secret: '{}' against stored hash: '{}'", 
+                    clientSecret, client.getClientSecretHash());
+        boolean secretMatches = secretHasher.verifyClientSecret(clientSecret, client.getClientSecretHash());
+        logger.info("Secret verification result for client '{}': {}", clientId, secretMatches);
+        
+        if (!secretMatches) {
+            logger.info("Invalid client secret for client: {}", clientId);
             throw new OAuth2AuthenticationException(
                 OAuthError.invalidClient("Invalid client credentials")
             );
         }
 
-        logger.debug("Client authenticated successfully: {}", clientId);
+        logger.info("Client authenticated successfully: {}", clientId);
+        logger.info("=== End Client Authentication Debug ===");
         return client;
     }
 
@@ -251,4 +266,4 @@ public class ClientCredentialsServiceImpl implements ClientCredentialsService {
         logger.debug("Using requested scope '{}' for client '{}'", requestedScope, client.getClientId());
         return requestedScope.trim();
     }
-} 
+}

@@ -1,5 +1,7 @@
 package com.example.auth.domain.model.oauth;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
 import java.util.Objects;
 
@@ -33,7 +35,11 @@ public class TokenRequest {
      * @param scope the requested scope (optional)
      * @throws IllegalArgumentException if validation fails
      */
-    public TokenRequest(String grantType, String clientId, String clientSecret, String scope) {
+    @JsonCreator
+    public TokenRequest(@JsonProperty("grant_type") String grantType, 
+                       @JsonProperty("client_id") String clientId, 
+                       @JsonProperty("client_secret") String clientSecret, 
+                       @JsonProperty("scope") String scope) {
         this.grantType = validateNotBlank(grantType, "Grant type cannot be blank");
         this.clientId = validateNotBlank(clientId, "Client ID cannot be blank");
         this.clientSecret = validateNotBlank(clientSecret, "Client secret cannot be blank");
